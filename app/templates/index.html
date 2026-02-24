@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bilibili Hot Topics</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
+        h1 { color: #333; }
+        .cluster { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; padding: 15px; background-color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .cluster h2 { color: #e91e63; margin-top: 0; }
+        .cluster-stats { display: flex; justify-content: space-around; margin-bottom: 15px; }
+        .stat { text-align: center; }
+        .stat-value { font-size: 1.5em; font-weight: bold; }
+        .stat-label { color: #666; }
+        .terms { margin-bottom: 15px; }
+        .terms span { display: inline-block; background-color: #eee; border-radius: 4px; padding: 5px 10px; margin: 2px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f2f2f2; }
+        #loading { text-align: center; font-size: 1.2em; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>Bilibili 热门话题趋势</h1>
+    <div id="loading">正在加载数据...</div>
+    <div id="clusters-container"></div>
+
+    <hr>
+
+    <h2>高级分析</h2>
+    <div id="advanced-analysis-container">
+        <h3>K-Means 聚类可视化 (t-SNE)</h3>
+        <img src="/static/kmeans_tsne_visualization.png" alt="K-Means Clustering Visualization" style="width:100%; max-width:800px;">
+        <h3>特征重要性</h3>
+        <img src="/static/feature_importance.png" alt="Feature Importance" style="width:100%; max-width:800px;">
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Fetch original topic clusters
+            fetch('/api/topics')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('loading').style.display = 'none';
+                    const container = document.getElementById('clusters-container');
+                    
+                    if (data.error) {
+                        container.innerHTML = `<p>Error: ${data.error}</p>`;
+                        return;
+                    }
+
+                    data.forEach(cluster => {
+                        const clusterDiv = document.createElement('div');
+                        clusterDiv.className = 'cluster';
+
+                        let videosTable = `
+                            <table>
+                                <tr>
+                                    <th>热门视频标题</th>
+                                    <th>播放量</th>
+                                </tr>
+                                ${cluster.top_videos.map(video => `
+                                    <tr>
+                                        <td>${video.title}</td>
+                                        <td>${video.view_count.toLocaleString()}</td>
+                                    </tr>
+                                `).join('')}
+                            </table>
+                        `;
+
+                        clusterDiv.innerHTML = `
+                            <h2>话题簇 #${cluster.cluster_id}</h2>
+                            <div class="cluster-stats">
+                                <div class="stat">
+                                    <div class="stat-value">${cluster.total_videos.toLocaleString()}</div>
+                                    <div class="stat-label">视频总数</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value">${cluster.total_views.toLocaleString()}</div>
+                                    <div class="stat-label">总播放量</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value">${Math.round(cluster.average_views).toLocaleString()}</div>
+                                    <div class="stat-label">平均播放量</div>
+                                </div>
+                            </div>
+                            <div class="terms">
+                                <strong>核心关键词 (模拟):</strong>
+                                ${cluster.top_terms.map(term => `<span>${term}</span>`).join('')}
+                            </div>
+                            ${videosTable}
+                        `;
+                        container.appendChild(clusterDiv);
+                    });
+                })
+                .catch(error => {
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('clusters-container').innerHTML = `<p>加载数据失败，请确保后端服务正在运行。</p><p>Error: ${error}</p>`;
+                    console.error('Error fetching API:', error);
+                });
+        });
+    </script>
+</body>
+</html>

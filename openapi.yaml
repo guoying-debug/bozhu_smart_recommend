@@ -1,0 +1,314 @@
+openapi: 3.0.3
+info:
+  title: 博主智策 - 内容分析与选题推荐 API
+  version: "0.1.0"
+  description: 面向自媒体博主的“话题挖掘-人群定位-选题推荐”工具接口集合
+servers:
+  - url: https://aimed-bottles-crossword-internet.trycloudflare.com
+paths:
+  /api/topics:
+    get:
+      operationId: getTopics
+      summary: 获取话题簇摘要（K-Means）
+      responses:
+        "200":
+          description: 话题簇列表（按总播放量降序）
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopicCluster"
+
+  /api/analysis_summary:
+    get:
+      operationId: getAnalysisSummary
+      summary: 获取聚类分析摘要
+      responses:
+        "200":
+          description: 聚类摘要
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisSummary"
+
+  /api/predict_view:
+    post:
+      operationId: predictView
+      summary: 预测播放量（回归）并返回分档结果
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PredictRequest"
+            examples:
+              example1:
+                value:
+                  title: 新手入门：3天做出爆款视频？
+                  category: 知识
+                  author_id: 123456
+                  publish_time: 1700000000
+      responses:
+        "200":
+          description: 预测结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PredictViewResponse"
+        "400":
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 模型未加载或服务错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/predict_bucket:
+    post:
+      operationId: predictBucket
+      summary: 预测播放量分档（0-10万/10-50万/50-200万/200万+）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PredictRequest"
+      responses:
+        "200":
+          description: 分档预测结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PredictBucketResponse"
+        "400":
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 分档模型未加载或服务错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/title_advice:
+    post:
+      operationId: titleAdvice
+      summary: 标题建议（相似爆款、关键词、类目推荐、可选预测）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PredictRequest"
+      responses:
+        "200":
+          description: 建议结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TitleAdviceResponse"
+        "400":
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    TopicCluster:
+      type: object
+      required: [cluster_id, top_terms, total_videos, total_views, average_views, top_videos]
+      properties:
+        cluster_id:
+          type: integer
+        top_terms:
+          type: array
+          items:
+            type: string
+        total_videos:
+          type: integer
+        total_views:
+          type: integer
+        average_views:
+          type: number
+        top_videos:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopVideo"
+
+    TopVideo:
+      type: object
+      required: [title, view_count]
+      properties:
+        title:
+          type: string
+        view_count:
+          type: integer
+
+    AnalysisSummary:
+      type: object
+      properties:
+        kmeans:
+          type: object
+          additionalProperties:
+            type: integer
+        dbscan:
+          type: object
+          properties:
+            total_clusters:
+              type: integer
+            noise_points:
+              type: integer
+            noise_percentage:
+              type: number
+            cluster_counts:
+              type: object
+              additionalProperties:
+                type: integer
+
+    PredictRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          description: 视频标题
+        category:
+          type: string
+          description: 分区/类目（可选，默认“未知”）
+        author_id:
+          oneOf:
+            - type: integer
+            - type: string
+          description: 作者ID（可选）
+        publish_time:
+          oneOf:
+            - type: integer
+            - type: string
+          description: 发布时间（可选；推荐 Unix 秒级时间戳）
+
+    PredictViewResponse:
+      type: object
+      properties:
+        title:
+          type: string
+        category:
+          type: string
+        author_id:
+          nullable: true
+        publish_time:
+          nullable: true
+        predicted_view_count:
+          type: integer
+        predicted_log1p_view_count:
+          type: number
+        predicted_bucket_id:
+          type: integer
+        predicted_bucket_name:
+          type: string
+        bucket_probabilities:
+          type: object
+          additionalProperties:
+            type: number
+          nullable: true
+        model_metrics:
+          type: object
+
+    PredictBucketResponse:
+      type: object
+      properties:
+        title:
+          type: string
+        category:
+          type: string
+        author_id:
+          nullable: true
+        publish_time:
+          nullable: true
+        predicted_bucket_id:
+          type: integer
+        predicted_bucket_name:
+          type: string
+        bucket_probabilities:
+          type: object
+          additionalProperties:
+            type: number
+          nullable: true
+        model_metrics:
+          type: object
+
+    TitleAdviceResponse:
+      type: object
+      properties:
+        input:
+          type: object
+          properties:
+            title:
+              type: string
+            category:
+              type: string
+            author_id:
+              nullable: true
+            publish_time:
+              nullable: true
+        predicted_view_count:
+          type: integer
+          nullable: true
+        predicted_bucket_name:
+          type: string
+          nullable: true
+        keywords:
+          type: array
+          items:
+            type: string
+        similar_videos:
+          type: array
+          items:
+            $ref: "#/components/schemas/SimilarVideo"
+        top_categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryStat"
+
+    SimilarVideo:
+      type: object
+      properties:
+        video_id:
+          nullable: true
+        title:
+          type: string
+        view_count:
+          type: integer
+        similarity:
+          type: number
+        category:
+          type: string
+          nullable: true
+
+    CategoryStat:
+      type: object
+      properties:
+        category:
+          type: string
+        count:
+          type: integer
+        avg_view_count:
+          type: number
+        median:
+          type: number
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
