@@ -1,4 +1,4 @@
-# 博主智策：B站热门内容分析与选题辅助（Flask + Scrapy + BERT 聚类）
+# 博主智策：B站热门内容分析与选题辅助（Flask + Scrapy + BERT 聚类）（代码在master分支里面）
 
 这个仓库把“爬热门数据 → 入库 → 聚类分析 → Web/API 展示 →（可选）预测播放量/标题建议”这一整条链路做成了可跑通的工程。
 
@@ -171,3 +171,58 @@ Invoke-RestMethod -Method Post http://127.0.0.1:5000/api/title_advice `
 - 启动报 “找不到数据文件 … videos_with_clusters_and_coords.csv”：先跑 `python scripts/topic_clustering.py` 或确认 models/ 里已有该文件。
 - `topic_clustering.py` 提示 DB_PASSWORD 未设置：该脚本强制从 MySQL 读数据，必须设置 DB_PASSWORD 且数据库可连。
 - 爬虫抓取中断/返回空：先降低 target_count 做小规模验证；需要更稳可以进一步加重试、降频、代理等策略（入口在 [video.py](file:///f:/就业/项目/博主项目/src/bilibili_scraper/bilibili_scraper/spiders/video.py)）。
+
+##  内网穿透到COZE的API
+本地先跑起来 → 用穿透工具给它一个公网 HTTPS 地址 → 把这个公网地址写到 Coze 的 OpenAPI servers/baseUrl 里 。
+1) 安装 cloudflared（Windows 最简单方式：直接下载 exe） 在 PowerShell 执行：
+
+```
+mkdir C:\Tools\cloudflared -Force | Out-Null
+cd C:\Tools\cloudflared
+
+# 64位 Windows（绝大多数都是这个）
+Invoke-WebRequest -Uri "https://github.com/
+cloudflare/cloudflared/releases/latest/download/
+cloudflared-windows-amd64.exe" -OutFile "cloudflared.
+exe"
+
+# 验证
+.\cloudflared.exe --version
+```
+2) 先启动你的项目服务（本地 5000 要先跑起来） 在项目根目录：
+
+```
+cd f:\就业\项目\博主项目
+.\.venv\Scripts\python app\app.py
+```
+3) 再开一个 PowerShell 窗口做内网穿透
+
+```
+.\cloudflared.exe tunnel --url http://localhost:5000
+```
+
+
+
+
+1) 别关这个 cloudflared 窗口
+
+- quick tunnel 必须保持这个进程一直运行；关了就失效、域名也可能换。
+2) 确认你的 Flask 后端也在跑（本地 5000） 另开一个 PowerShell（别用正在跑 cloudflared 的那个窗口），在项目根目录启动：
+
+```
+cd f:\就业\项目\博主项目
+.\.venv\Scripts\python app\app.py
+```
+3) 先用公网地址自测接口是否通
+
+```
+Invoke-RestMethod "https://
+clark-assumption-established-mixture.trycloudflare.
+com/api/topics"
+```
+- 能返回 JSON：穿透 OK
+
+
+
+4) 更新 openapi.yaml 的 servers.url（给 Coze 用）
+https://clark-assumption-established-mixture.trycloudflare.com
