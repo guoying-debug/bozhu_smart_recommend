@@ -61,7 +61,7 @@
 └── README.md
 ```
 
-## 核心改进 (面试重点)
+## 核心改进
 
 ### 1. 架构重构 (Architecture Refactoring)
 - **分层设计**：将单文件 Flask 应用拆分为 `api` (路由), `core` (业务), `models` (数据), `utils` (工具) 四层，解耦了 HTTP 处理与核心算法。
