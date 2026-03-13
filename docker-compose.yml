@@ -1,0 +1,70 @@
+name: bilibili_analysis
+
+services:
+  # 1. 应用服务
+  web:
+    build: .
+    container_name: bilibili_web
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=root_password
+      - DB_NAME=bilibili_data
+    depends_on:
+      - db
+    networks:
+      - bilibili_net
+
+  # 2. 数据库服务
+  db:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:8.0
+    container_name: bilibili_db
+    restart: always
+    ports:
+      - "3307:3306" # 映射到宿主机 3307 端口，避免与本地 MySQL 冲突
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_password
+      - MYSQL_DATABASE=bilibili_data
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - bilibili_net
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  # 3. 监控服务: Prometheus
+  prometheus:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/prom/prometheus:latest
+    container_name: bilibili_prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - bilibili_net
+
+  # 4. 监控看板: Grafana
+  grafana:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/grafana/grafana:latest
+    container_name: bilibili_grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    networks:
+      - bilibili_net
+
+networks:
+  bilibili_net:
+    driver: bridge
+
+volumes:
+  db_data:

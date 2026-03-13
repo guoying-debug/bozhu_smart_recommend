@@ -4,7 +4,7 @@ info:
   version: "0.1.0"
   description: 面向自媒体博主的“话题挖掘-人群定位-选题推荐”工具接口集合
 servers:
-  - url: https://aimed-bottles-crossword-internet.trycloudflare.com
+  - url:  https://inspections-sixth-regarded-professional.trycloudflare.com
 paths:
   /api/topics:
     get:
@@ -200,85 +200,59 @@ components:
     PredictViewResponse:
       type: object
       properties:
-        title:
-          type: string
-        category:
-          type: string
-        author_id:
-          nullable: true
-        publish_time:
-          nullable: true
-        predicted_view_count:
-          type: integer
-        predicted_log1p_view_count:
+        predicted_view:
           type: number
-        predicted_bucket_id:
-          type: integer
-        predicted_bucket_name:
+        predicted_bucket:
           type: string
-        bucket_probabilities:
-          type: object
-          additionalProperties:
-            type: number
-          nullable: true
-        model_metrics:
-          type: object
+        bucket_id:
+          type: integer
+        explanations:
+          type: array
+          items:
+            type: object
+            properties:
+              feature:
+                type: string
+              effect:
+                type: string
+              reason:
+                type: string
 
     PredictBucketResponse:
       type: object
       properties:
-        title:
+        predicted_bucket:
           type: string
-        category:
-          type: string
-        author_id:
-          nullable: true
-        publish_time:
-          nullable: true
-        predicted_bucket_id:
+        bucket_id:
           type: integer
-        predicted_bucket_name:
-          type: string
-        bucket_probabilities:
+        probabilities:
           type: object
           additionalProperties:
             type: number
           nullable: true
-        model_metrics:
-          type: object
 
     TitleAdviceResponse:
       type: object
       properties:
-        input:
-          type: object
-          properties:
-            title:
-              type: string
-            category:
-              type: string
-            author_id:
-              nullable: true
-            publish_time:
-              nullable: true
-        predicted_view_count:
-          type: integer
-          nullable: true
-        predicted_bucket_name:
-          type: string
-          nullable: true
-        keywords:
+        similar_titles:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              view_count:
+                type: integer
+              similarity:
+                type: number
+        advice_list:
           type: array
           items:
             type: string
-        similar_videos:
-          type: array
-          items:
-            $ref: "#/components/schemas/SimilarVideo"
-        top_categories:
-          type: array
-          items:
-            $ref: "#/components/schemas/CategoryStat"
+        diagnosis:
+          type: string
+        summary:
+          type: string
 
     SimilarVideo:
       type: object

@@ -1,11 +1,13 @@
 import pandas as pd
 from sqlalchemy import create_engine
 import os
+import sys
 import jieba
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import silhouette_score
 import re
 import joblib
 import numpy as np
@@ -13,33 +15,23 @@ from transformers import BertTokenizer, BertModel
 import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.express as px
 
-# --- 数据库配置 ---
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "3306")
-DB_NAME = os.getenv("DB_NAME", "bilibili_data")
-DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-
-# --- 模型和文件路径 ---
+# 添加项目根目录到 sys.path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_DIR = os.path.join(BASE_DIR, 'models')
-os.makedirs(MODEL_DIR, exist_ok=True)
+sys.path.append(BASE_DIR)
 
-# --- 文本预处理 ---
-def get_stopwords():
-    """返回一个包含常见中文停用词的集合。"""
-    return {"的", "是", "了", "在", "我", "你", "他", "她", "它", "们", "都", "也",
-            "【", "】", "！", "？", "，", "。", " ", "#", "这个", "一个", "怎么", "这种"}
+from app.core.config import (
+    get_database_url, DATA_PROCESSED_DIR, MODELS_TRAINED_DIR, IMAGES_DIR,
+    BERT_EMBEDDINGS_PATH, BERT_KMEANS_MODEL_PATH, BERT_DBSCAN_MODEL_PATH,
+    DATA_PATH
+)
+from app.utils.text_utils import preprocess_text_for_bert
 
-def preprocess_text_for_bert(text):
-    """
-    为BERT准备文本，这里可以做一些简单的清洗，但要保留大部分原始信息。
-    """
-    # 移除一些特殊符号，但保留中英文和数字
-    text = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9]', ' ', text)
-    return text.strip()
+# 确保目录存在
+os.makedirs(DATA_PROCESSED_DIR, exist_ok=True)
+os.makedirs(MODELS_TRAINED_DIR, exist_ok=True)
+os.makedirs(IMAGES_DIR, exist_ok=True)
 
 # --- BERT 向量化 ---
 def get_bert_embeddings(texts, model_name='bert-base-chinese', batch_size=16):
@@ -76,38 +68,64 @@ def get_bert_embeddings(texts, model_name='bert-base-chinese', batch_size=16):
 
     return np.vstack(embeddings)
 
-# --- 可视化 ---
-def plot_clusters(df, x_col, y_col, cluster_col, title, filename):
-    """
-    根据降维结果和聚类标签绘制散点图并保存。
-    """
-    print(f"正在生成可视化图表: {title}...")
+# --- 自动选择最优 K 值 ---
+def find_optimal_k(embeddings, k_range=range(5, 20)):
+    print(f"正在寻找最优 K 值 (范围: {k_range})...")
+    best_k = 0
+    best_score = -1
+    scores = []
     
-    # 设置中文字体，防止乱码
-    plt.rcParams['font.sans-serif'] = ['SimHei']
-    plt.rcParams['axes.unicode_minus'] = False
-
-    plt.figure(figsize=(16, 10))
+    for k in k_range:
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(embeddings)
+        score = silhouette_score(embeddings, labels)
+        scores.append(score)
+        print(f"K={k}, Silhouette Score={score:.4f}")
+        
+        if score > best_score:
+            best_score = score
+            best_k = k
+            
+    print(f"最优 K 值: {best_k} (Score: {best_score:.4f})")
     
-    noise = df[df[cluster_col] == -1]
-    non_noise = df[df[cluster_col] != -1]
-    
-    sns.scatterplot(data=non_noise, x=x_col, y=y_col, hue=cluster_col,
-                    palette=sns.color_palette("hsv", len(non_noise[cluster_col].unique())),
-                    legend="full", alpha=0.8)
-    
-    if not noise.empty:
-        sns.scatterplot(data=noise, x=x_col, y=y_col, color="grey", marker="x", label="Noise", alpha=0.5)
-
-    plt.title(title, fontsize=16)
-    plt.xlabel(x_col)
-    plt.ylabel(y_col)
-    plt.legend(title=cluster_col)
-    
-    filepath = os.path.join(MODEL_DIR, filename)
-    plt.savefig(filepath)
+    # 绘制 K 值评估图
+    plt.figure(figsize=(10, 6))
+    plt.plot(list(k_range), scores, marker='o')
+    plt.title('Silhouette Score for Optimal K')
+    plt.xlabel('Number of Clusters (k)')
+    plt.ylabel('Silhouette Score')
+    plt.savefig(os.path.join(IMAGES_DIR, 'optimal_k_score.png'))
     plt.close()
-    print(f"图表已保存到: {filepath}")
+    
+    return best_k
+
+# --- 交互式可视化 ---
+def plot_clusters_interactive(df, x_col, y_col, cluster_col, title, filename):
+    print(f"正在生成交互式可视化图表: {title}...")
+    
+    # 过滤噪声点用于着色
+    df['Cluster_Label'] = df[cluster_col].apply(lambda x: f"Cluster {x}" if x != -1 else "Noise")
+    
+    fig = px.scatter(
+        df, 
+        x=x_col, 
+        y=y_col, 
+        color='Cluster_Label',
+        hover_data=['title', 'view_count', 'category'],
+        title=title,
+        template="plotly_white",
+        opacity=0.8
+    )
+    
+    fig.update_layout(
+        legend_title_text='Topic Clusters',
+        xaxis_title="Dimension 1",
+        yaxis_title="Dimension 2"
+    )
+    
+    output_path = os.path.join(IMAGES_DIR, filename)
+    fig.write_html(output_path)
+    print(f"交互式图表已保存到: {output_path}")
 
 # --- 特征重要性分析 ---
 def analyze_feature_importance(df):
@@ -116,22 +134,19 @@ def analyze_feature_importance(df):
     """
     print("\n--- 开始进行特征重要性分析 ---")
     
-    # 选择特征和目标
-    # 我们选择K-Means的聚类结果作为目标，因为它没有噪声点，更适合分类任务
     features = ['view_count', 'like_count', 'coin_count', 'favorite_count', 'share_count']
     target = 'bert_kmeans_cluster'
     
-    X = df[features]
-    y = df[target]
+    # 过滤掉缺失值
+    df_clean = df.dropna(subset=features + [target])
     
-    print(f"分析特征: {features}")
-    print(f"目标变量: {target}")
+    X = df_clean[features]
+    y = df_clean[target]
     
     # 训练随机森林模型
     print("正在训练随机森林分类器...")
     rf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
     rf.fit(X, y)
-    print("模型训练完成。")
     
     # 获取并展示特征重要性
     importance_df = pd.DataFrame({
@@ -149,7 +164,7 @@ def analyze_feature_importance(df):
     plt.xlabel('Importance')
     plt.ylabel('Feature')
     
-    filepath = os.path.join(MODEL_DIR, 'feature_importance.png')
+    filepath = os.path.join(IMAGES_DIR, 'feature_importance.png')
     plt.savefig(filepath)
     plt.close()
     print(f"\n特征重要性图表已保存到: {filepath}")
@@ -160,17 +175,23 @@ def perform_clustering():
     """
     加载数据，执行文本预处理、BERT向量化、聚类、降维、可视化和特征分析，并保存所有结果。
     """
-    if not DB_PASSWORD:
+    database_url = get_database_url()
+    if not database_url:
         print("致命错误：未设置 DB_PASSWORD 环境变量。")
         return
 
     try:
         # 1. 加载数据
-        engine = create_engine(DATABASE_URL)
-        df = pd.read_sql("SELECT video_id, title, view_count, like_count, coin_count, favorite_count, share_count FROM videos", engine)
+        engine = create_engine(database_url)
+        print("正在从数据库加载数据...")
+        df = pd.read_sql("SELECT video_id, title, view_count, like_count, coin_count, favorite_count, share_count, category FROM videos", engine)
         df = df.reset_index(drop=True)
         print(f"成功从数据库加载了 {len(df)} 条视频数据。")
         print("-" * 50)
+
+        if len(df) < 20:
+            print("数据量过少，无法进行聚类。")
+            return
 
         # 2. 文本预处理
         print("正在为BERT进行文本预处理...")
@@ -179,31 +200,33 @@ def perform_clustering():
         print("-" * 50)
 
         # 3. BERT 向量化
-        embeddings_path = os.path.join(MODEL_DIR, 'bert_embeddings.npy')
         text_vectors = None
-        if os.path.exists(embeddings_path):
+        if os.path.exists(BERT_EMBEDDINGS_PATH):
             print("正在加载已保存的BERT向量...")
-            loaded_vectors = np.load(embeddings_path)
-            if loaded_vectors.shape[0] == len(df):
-                text_vectors = loaded_vectors
-            else:
-                print(f"已保存向量数量({loaded_vectors.shape[0]})与数据条数({len(df)})不一致，将重新生成BERT向量...")
+            try:
+                loaded_vectors = np.load(BERT_EMBEDDINGS_PATH)
+                if loaded_vectors.shape[0] == len(df):
+                    text_vectors = loaded_vectors
+                else:
+                    print(f"已保存向量数量({loaded_vectors.shape[0]})与数据条数({len(df)})不一致，将重新生成BERT向量...")
+            except Exception as e:
+                print(f"加载向量失败: {e}，将重新生成...")
 
         if text_vectors is None:
             print("开始生成新的BERT向量...")
             text_vectors = get_bert_embeddings(df['clean_title'].tolist())
-            np.save(embeddings_path, text_vectors)
-            print(f"BERT向量已生成并保存到 {embeddings_path}")
+            np.save(BERT_EMBEDDINGS_PATH, text_vectors)
+            print(f"BERT向量已生成并保存到 {BERT_EMBEDDINGS_PATH}")
         print("BERT向量化完成。向量矩阵形状:", text_vectors.shape)
         print("-" * 50)
         
-        # 4. K-Means 聚类
-        num_clusters = 10
-        print(f"正在进行K-Means聚类（{num_clusters}个聚类）...")
-        kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init=10)
+        # 4. 自动选择最优 K 值并聚类
+        optimal_k = find_optimal_k(text_vectors, k_range=range(5, 15)) # 缩小范围以节省时间
+        print(f"正在进行K-Means聚类（使用最优K={optimal_k}）...")
+        kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
         df['bert_kmeans_cluster'] = kmeans.fit_predict(text_vectors)
         print("K-Means聚类完成。")
-        joblib.dump(kmeans, os.path.join(MODEL_DIR, 'bert_kmeans_model.pkl'))
+        joblib.dump(kmeans, BERT_KMEANS_MODEL_PATH)
         print("-" * 50)
 
         # 5. DBSCAN 聚类
@@ -214,7 +237,7 @@ def perform_clustering():
         dbscan = DBSCAN(eps=20, min_samples=5, metric='euclidean')
         df['dbscan_cluster'] = dbscan.fit_predict(text_vectors_scaled)
         print("DBSCAN聚类完成。")
-        joblib.dump(dbscan, os.path.join(MODEL_DIR, 'bert_dbscan_model.pkl'))
+        joblib.dump(dbscan, BERT_DBSCAN_MODEL_PATH)
         print("-" * 50)
 
         # 6. 降维
@@ -233,8 +256,8 @@ def perform_clustering():
         print("t-SNE降维完成。")
         print("-" * 50)
 
-        # 7. 可视化
-        plot_clusters(df, 'tsne_x', 'tsne_y', 'bert_kmeans_cluster', 'K-Means Clustering Visualization (t-SNE)', 'kmeans_tsne_visualization.png')
+        # 7. 交互式可视化 (替换原静态图)
+        plot_clusters_interactive(df, 'tsne_x', 'tsne_y', 'bert_kmeans_cluster', 'K-Means Clustering Visualization (t-SNE)', 'kmeans_tsne_interactive.html')
         print("-" * 50)
 
         # 8. 显示聚类结果摘要
@@ -250,14 +273,15 @@ def perform_clustering():
         print("-" * 50)
         
         # 9. 保存最终结果
-        output_path = os.path.join(MODEL_DIR, 'videos_with_clusters_and_coords.csv')
-        df.to_csv(output_path, index=False, encoding='utf-8-sig')
-        print(f"包含聚类和降维坐标的最终数据已保存到 {output_path}")
+        df.to_csv(DATA_PATH, index=False, encoding='utf-8-sig')
+        print(f"包含聚类和降维坐标的最终数据已保存到 {DATA_PATH}")
         
         # 10. 特征重要性分析
         analyze_feature_importance(df)
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"发生错误: {e}")
 
 if __name__ == "__main__":

@@ -1,90 +1,55 @@
 # Scrapy settings for bilibili_scraper project
-#
-# For simplicity, this file contains only settings considered important or
-# commonly used. You can find more settings consulting the documentation:
-#
-#     https://docs.scrapy.org/en/latest/topics/settings.html
-#     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-#     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
 BOT_NAME = "bilibili_scraper"
 
 SPIDER_MODULES = ["bilibili_scraper.spiders"]
 NEWSPIDER_MODULE = "bilibili_scraper.spiders"
 
-ADDONS = {}
-
-
-# Crawl responsibly by identifying yourself (and your website) on the user-agent
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-
-# Obey robots.txt rules
+# --- 反爬策略 ---
+# 1. 不遵守 robots.txt (B站会禁止爬虫)
 ROBOTSTXT_OBEY = False
 
-LOG_LEVEL = 'DEBUG'
-DUPEFILTER_DEBUG = True
+# 2. 下载延迟 (降低频率)
+DOWNLOAD_DELAY = 2  # 每次请求间隔 2 秒
+RANDOMIZE_DOWNLOAD_DELAY = True # 随机化延迟 (0.5 * DELAY ~ 1.5 * DELAY)
 
-# Concurrency and throttling settings
-#CONCURRENT_REQUESTS = 16
-CONCURRENT_REQUESTS_PER_DOMAIN = 1
-DOWNLOAD_DELAY = 1
+# 3. 禁用 Cookies (防止被追踪)
+COOKIES_ENABLED = False
 
-# Disable cookies (enabled by default)
-#COOKIES_ENABLED = False
+# 4. 并发设置
+CONCURRENT_REQUESTS = 4 # 降低并发数
+CONCURRENT_REQUESTS_PER_DOMAIN = 4
 
-# Disable Telnet Console (enabled by default)
-#TELNETCONSOLE_ENABLED = False
+# 5. 重试机制 (网络波动/封禁时重试)
+RETRY_ENABLED = True
+RETRY_TIMES = 3  # 重试 3 次
+RETRY_HTTP_CODES = [500, 502, 503, 504, 522, 524, 408, 429, 403] # 遇到这些码重试
 
-# Override the default request headers:
-#DEFAULT_REQUEST_HEADERS = {
-#    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-#    "Accept-Language": "en",
-#}
+# 6. 中间件配置 (随机 UA)
+DOWNLOADER_MIDDLEWARES = {
+    'bilibili_scraper.middlewares.RandomUserAgentMiddleware': 400,
+    # 'bilibili_scraper.middlewares.ProxyMiddleware': 410, # 如果有代理池，解除注释
+    'bilibili_scraper.middlewares.BilibiliScraperDownloaderMiddleware': 543,
+}
 
-# Enable or disable spider middlewares
-# See https://docs.scrapy.org/en/latest/topics/spider-middleware.html
-#SPIDER_MIDDLEWARES = {
-#    "bilibili_scraper.middlewares.BilibiliScraperSpiderMiddleware": 543,
-#}
+# 7. 数据管道 (数据校验与入库)
+ITEM_PIPELINES = {
+    'bilibili_scraper.pipelines.BilibiliDataValidationPipeline': 300,
+    'bilibili_scraper.pipelines.BilibiliJsonWriterPipeline': 350,
+    # 'bilibili_scraper.pipelines.BilibiliMysqlPipeline': 400, # 如果需要直接入库，解除注释
+}
 
-# Enable or disable downloader middlewares
-# See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-#DOWNLOADER_MIDDLEWARES = {
-#    "bilibili_scraper.middlewares.BilibiliScraperDownloaderMiddleware": 543,
-#}
+# 8. User-Agent 池
+USER_AGENT_LIST = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
+]
 
-# Enable or disable extensions
-# See https://docs.scrapy.org/en/latest/topics/extensions.html
-#EXTENSIONS = {
-#    "scrapy.extensions.telnet.TelnetConsole": None,
-#}
+# 日志级别
+LOG_LEVEL = 'INFO'
 
-# Configure item pipelines
-# See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-#ITEM_PIPELINES = {
-#    "bilibili_scraper.pipelines.BilibiliScraperPipeline": 300,
-#}
-
-# Enable and configure the AutoThrottle extension (disabled by default)
-# See https://docs.scrapy.org/en/latest/topics/autothrottle.html
-#AUTOTHROTTLE_ENABLED = True
-# The initial download delay
-#AUTOTHROTTLE_START_DELAY = 5
-# The maximum download delay to be set in case of high latencies
-#AUTOTHROTTLE_MAX_DELAY = 60
-# The average number of requests Scrapy should be sending in parallel to
-# each remote server
-#AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
-# Enable showing throttling stats for every response received:
-#AUTOTHROTTLE_DEBUG = False
-
-# Enable and configure HTTP caching (disabled by default)
-# See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html#httpcache-middleware-settings
-#HTTPCACHE_ENABLED = True
-#HTTPCACHE_EXPIRATION_SECS = 0
-#HTTPCACHE_DIR = "httpcache"
-#HTTPCACHE_IGNORE_HTTP_CODES = []
-#HTTPCACHE_STORAGE = "scrapy.extensions.httpcache.FilesystemCacheStorage"
-
-# Set settings whose default value is deprecated to a future-proof value
+# 编码
 FEED_EXPORT_ENCODING = "utf-8"

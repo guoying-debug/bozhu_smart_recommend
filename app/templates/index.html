@@ -1,103 +1,249 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bilibili Hot Topics</title>
+    <title>博主智策 - B站热门内容分析与选题辅助</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
-        h1 { color: #333; }
-        .cluster { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; padding: 15px; background-color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .cluster h2 { color: #e91e63; margin-top: 0; }
-        .cluster-stats { display: flex; justify-content: space-around; margin-bottom: 15px; }
-        .stat { text-align: center; }
-        .stat-value { font-size: 1.5em; font-weight: bold; }
-        .stat-label { color: #666; }
-        .terms { margin-bottom: 15px; }
-        .terms span { display: inline-block; background-color: #eee; border-radius: 4px; padding: 5px 10px; margin: 2px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #f2f2f2; }
-        #loading { text-align: center; font-size: 1.2em; color: #666; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        h1, h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-top: 30px; }
+        h1 { text-align: center; border-bottom: none; color: #3498db; }
+        
+        /* 布局网格 */
+        .grid-row { display: flex; gap: 20px; flex-wrap: wrap; }
+        .grid-col { flex: 1; min-width: 300px; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        
+        /* 预测工具样式 */
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; transition: background 0.3s; }
+        button:hover { background-color: #2980b9; }
+        
+        .result-box { margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 4px; border-left: 4px solid #3498db; display: none; }
+        .explanation-item { margin: 5px 0; font-size: 0.9em; }
+        .badge-pos { color: green; background: #e8f5e9; padding: 2px 5px; border-radius: 3px; }
+        .badge-neg { color: red; background: #ffebee; padding: 2px 5px; border-radius: 3px; }
+        
+        /* 聚类卡片样式 */
+        .cluster { background: #fff; border-radius: 8px; margin-bottom: 20px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: transform 0.2s; }
+        .cluster:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .cluster h3 { color: #e91e63; margin-top: 0; border-bottom: none; font-size: 1.2em; }
+        
+        .cluster-stats { display: flex; justify-content: space-around; margin: 15px 0; background: #fafafa; padding: 10px; border-radius: 6px; }
+        .stat-item { text-align: center; }
+        .stat-value { font-size: 1.2em; font-weight: bold; color: #2c3e50; }
+        .stat-label { font-size: 0.8em; color: #7f8c8d; }
+        
+        .keywords { margin: 10px 0; }
+        .keyword-tag { display: inline-block; background-color: #e1f5fe; color: #0277bd; border-radius: 12px; padding: 4px 10px; margin: 2px; font-size: 0.85em; }
+        
+        .video-list { font-size: 0.9em; border-top: 1px solid #eee; margin-top: 10px; padding-top: 10px; }
+        .video-item { display: flex; justify-content: space-between; padding: 5px 0; }
+        .video-views { color: #95a5a6; min-width: 80px; text-align: right; }
+        
+        #loading { text-align: center; color: #7f8c8d; padding: 20px; }
+        img { max-width: 100%; border-radius: 4px; }
     </style>
 </head>
 <body>
-    <h1>Bilibili 热门话题趋势</h1>
-    <div id="loading">正在加载数据...</div>
-    <div id="clusters-container"></div>
+    <div class="container">
+        <h1>博主智策：B站热门内容分析与选题辅助</h1>
+        
+        <!-- 预测与建议工具区 -->
+        <div class="grid-row">
+            <!-- 播放量预测 -->
+            <div class="grid-col">
+                <h2>📈 播放量预测</h2>
+                <div class="form-group">
+                    <label>视频标题</label>
+                    <input type="text" id="pred-title" placeholder="输入你想取的标题...">
+                </div>
+                <div class="form-group">
+                    <label>分区</label>
+                    <select id="pred-category">
+                        <option value="知识">知识</option>
+                        <option value="生活">生活</option>
+                        <option value="游戏">游戏</option>
+                        <option value="动画">动画</option>
+                        <option value="美食">美食</option>
+                    </select>
+                </div>
+                <button onclick="predictView()">开始预测</button>
+                
+                <div id="pred-result" class="result-box">
+                    <h3>预测结果</h3>
+                    <p>预估播放量：<strong id="res-view" style="color: #e91e63; font-size: 1.2em;">--</strong></p>
+                    <p>分档等级：<span id="res-bucket">--</span></p>
+                    <div id="res-explanations"></div>
+                </div>
+            </div>
+            
+            <!-- 标题优化建议 -->
+            <div class="grid-col">
+                <h2>💡 标题优化建议</h2>
+                <div class="form-group">
+                    <label>视频标题</label>
+                    <input type="text" id="advice-title" placeholder="输入标题获取建议...">
+                </div>
+                <button onclick="getAdvice()" style="background-color: #27ae60;">获取建议</button>
+                
+                <div id="advice-result" class="result-box" style="border-left-color: #27ae60;">
+                    <h3>优化报告</h3>
+                    <div id="advice-content"></div>
+                    <h4>相似爆款参考：</h4>
+                    <ul id="similar-list" style="padding-left: 20px; font-size: 0.9em; color: #555;"></ul>
+                </div>
+            </div>
+        </div>
 
-    <hr>
+        <!-- 热门话题聚类 -->
+        <h2>🔥 热门话题聚类 (每日更新)</h2>
+        <div id="loading">正在加载聚类数据...</div>
+        <div id="clusters-container" class="grid-row"></div>
 
-    <h2>高级分析</h2>
-    <div id="advanced-analysis-container">
-        <h3>K-Means 聚类可视化 (t-SNE)</h3>
-        <img src="/static/kmeans_tsne_visualization.png" alt="K-Means Clustering Visualization" style="width:100%; max-width:800px;">
-        <h3>特征重要性</h3>
-        <img src="/static/feature_importance.png" alt="Feature Importance" style="width:100%; max-width:800px;">
+        <!-- 可视化分析 -->
+        <h2>📊 数据可视化</h2>
+        <div class="grid-row">
+            <div class="grid-col">
+                <h3>话题分布图 (t-SNE)</h3>
+                <iframe src="/static/images/kmeans_tsne_interactive.html" style="width:100%; height:500px; border:none;"></iframe>
+                <!-- 兼容旧版静态图 -->
+                <img src="/static/images/kmeans_tsne_visualization.png" onerror="this.style.display='none'" alt="Static t-SNE">
+            </div>
+            <div class="grid-col">
+                <h3>特征重要性</h3>
+                <img src="/static/images/feature_importance.png" style="width:100%;" alt="Feature Importance">
+            </div>
+        </div>
     </div>
 
     <script>
+        // 1. 播放量预测逻辑
+        async function predictView() {
+            const title = document.getElementById('pred-title').value;
+            const category = document.getElementById('pred-category').value;
+            
+            if(!title) return alert("请输入标题");
+            
+            const btn = event.target;
+            btn.innerText = "计算中...";
+            
+            try {
+                const res = await fetch('/api/predict_view', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({title, category})
+                });
+                const data = await res.json();
+                
+                if(data.error) throw new Error(data.error);
+                
+                document.getElementById('pred-result').style.display = 'block';
+                document.getElementById('res-view').innerText = Math.round(data.predicted_view).toLocaleString();
+                document.getElementById('res-bucket').innerText = data.predicted_bucket;
+                
+                // 渲染解释性因子
+                let expHtml = '<h4>影响因子分析：</h4>';
+                data.explanations.forEach(exp => {
+                    const badge = exp.effect === '正向' ? 'badge-pos' : 'badge-neg';
+                    expHtml += `<div class="explanation-item"><span class="${badge}">${exp.effect}</span> <strong>${exp.feature}</strong>: ${exp.reason}</div>`;
+                });
+                document.getElementById('res-explanations').innerHTML = expHtml;
+                
+            } catch(e) {
+                alert("预测失败: " + e.message);
+            } finally {
+                btn.innerText = "开始预测";
+            }
+        }
+
+        // 2. 标题建议逻辑
+        async function getAdvice() {
+            const title = document.getElementById('advice-title').value;
+            if(!title) return alert("请输入标题");
+            
+            try {
+                const res = await fetch('/api/title_advice', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({title})
+                });
+                const data = await res.json();
+                
+                document.getElementById('advice-result').style.display = 'block';
+                
+                let adviceHtml = '';
+                
+                // 1. 显示智能体诊断 (包含特征重要性分析)
+                if (data.diagnosis) {
+                    adviceHtml += `<div style="background:#e8f5e9; padding:10px; border-radius:5px; margin-bottom:10px;">
+                        <strong>🤖 智能体诊断：</strong><br>${data.diagnosis.replace(/\n/g, '<br>')}
+                    </div>`;
+                }
+
+                // 2. 建议列表
+                adviceHtml += '<h4>优化建议：</h4><ul>';
+                if (data.advice_list && data.advice_list.length > 0) {
+                    data.advice_list.forEach(a => adviceHtml += `<li>${a}</li>`);
+                } else {
+                    adviceHtml += '<li>暂无具体建议</li>';
+                }
+                adviceHtml += '</ul>';
+                
+                document.getElementById('advice-content').innerHTML = adviceHtml;
+                
+                // 3. 相似爆款
+                const simList = document.getElementById('similar-list');
+                simList.innerHTML = '';
+                data.similar_titles.forEach(item => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `${item.title} <span style="color:#999">(${Math.round(item.view_count/10000)}万播放)</span>`;
+                    simList.appendChild(li);
+                });
+                
+            } catch(e) {
+                alert("获取建议失败: " + e.message);
+            }
+        }
+
+        // 3. 加载聚类数据
         document.addEventListener('DOMContentLoaded', function() {
-            // Fetch original topic clusters
             fetch('/api/topics')
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('loading').style.display = 'none';
                     const container = document.getElementById('clusters-container');
                     
-                    if (data.error) {
-                        container.innerHTML = `<p>Error: ${data.error}</p>`;
-                        return;
-                    }
+                    if (data.error) return container.innerHTML = `<p>Error: ${data.error}</p>`;
 
                     data.forEach(cluster => {
-                        const clusterDiv = document.createElement('div');
-                        clusterDiv.className = 'cluster';
-
-                        let videosTable = `
-                            <table>
-                                <tr>
-                                    <th>热门视频标题</th>
-                                    <th>播放量</th>
-                                </tr>
-                                ${cluster.top_videos.map(video => `
-                                    <tr>
-                                        <td>${video.title}</td>
-                                        <td>${video.view_count.toLocaleString()}</td>
-                                    </tr>
-                                `).join('')}
-                            </table>
-                        `;
-
-                        clusterDiv.innerHTML = `
-                            <h2>话题簇 #${cluster.cluster_id}</h2>
+                        const div = document.createElement('div');
+                        div.className = 'cluster grid-col'; // 使用 grid-col 样式
+                        div.style.flex = "0 0 30%"; // 强制一行三个
+                        
+                        div.innerHTML = `
+                            <h3>#${cluster.cluster_id} 话题簇</h3>
+                            <div class="keywords">
+                                ${cluster.top_terms.map(t => `<span class="keyword-tag">${t}</span>`).join('')}
+                            </div>
                             <div class="cluster-stats">
-                                <div class="stat">
-                                    <div class="stat-value">${cluster.total_videos.toLocaleString()}</div>
-                                    <div class="stat-label">视频总数</div>
-                                </div>
-                                <div class="stat">
-                                    <div class="stat-value">${cluster.total_views.toLocaleString()}</div>
-                                    <div class="stat-label">总播放量</div>
-                                </div>
-                                <div class="stat">
-                                    <div class="stat-value">${Math.round(cluster.average_views).toLocaleString()}</div>
-                                    <div class="stat-label">平均播放量</div>
-                                </div>
+                                <div class="stat-item"><div class="stat-value">${cluster.total_videos}</div><div class="stat-label">视频数</div></div>
+                                <div class="stat-item"><div class="stat-value">${Math.round(cluster.average_views/10000)}w</div><div class="stat-label">均播</div></div>
                             </div>
-                            <div class="terms">
-                                <strong>核心关键词 (模拟):</strong>
-                                ${cluster.top_terms.map(term => `<span>${term}</span>`).join('')}
+                            <div class="video-list">
+                                ${cluster.top_videos.slice(0, 3).map(v => `
+                                    <div class="video-item">
+                                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;" title="${v.title}">${v.title}</span>
+                                        <span class="video-views">${Math.round(v.view_count/10000)}w</span>
+                                    </div>
+                                `).join('')}
                             </div>
-                            ${videosTable}
                         `;
-                        container.appendChild(clusterDiv);
+                        container.appendChild(div);
                     });
-                })
-                .catch(error => {
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('clusters-container').innerHTML = `<p>加载数据失败，请确保后端服务正在运行。</p><p>Error: ${error}</p>`;
-                    console.error('Error fetching API:', error);
                 });
         });
     </script>

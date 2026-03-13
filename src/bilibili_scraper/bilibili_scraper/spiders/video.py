@@ -2,65 +2,84 @@ import scrapy
 import json
 import logging
 import math
+import os
 from bilibili_scraper.items import BilibiliScraperItem
 
 class VideoSpider(scrapy.Spider):
-    # 爬虫的唯一标识名
     name = "video"
-    # 允许爬取的域名
     allowed_domains = ["api.bilibili.com"]
     
-    # 为这个爬虫单独设置的配置
-    custom_settings = {
-        'CONCURRENT_REQUESTS': 1,  # 并发请求数，设置为1，降低请求频率
-        'DOWNLOAD_DELAY': 2,       # 下载延迟，设置为2秒，避免对服务器造成太大压力
-    }
-
-    def __init__(self, target_count=5000, *args, **kwargs):
+    def __init__(self, target_count=5000, incremental=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.page_size = 20
         self.target_count = int(target_count)
         self.max_pages = max(1, int(math.ceil(self.target_count / self.page_size)))
         self.crawled_count = 0
+        self.incremental = str(incremental).lower() == 'true'
+        self.seen_ids = set()
+        
+        # 如果是增量抓取，先加载已有的 ID
+        if self.incremental:
+            self._load_seen_ids()
+
+    def _load_seen_ids(self):
+        """加载已存在的视频 ID，防止重复抓取"""
+        # 这里假设从 output.json 加载，实际生产环境应该查数据库或 Redis
+        # 为了演示，我们尝试读取 raw data 目录下的文件
+        file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))), 'data', 'raw', 'output.json')
+        
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    for item in data:
+                        if 'video_id' in item:
+                            self.seen_ids.add(item['video_id'])
+                logging.info(f"Loaded {len(self.seen_ids)} existing video IDs for incremental crawling.")
+            except Exception as e:
+                logging.warning(f"Failed to load existing data for incremental crawling: {e}")
 
     def start_requests(self):
-        """
-        这是爬虫的入口函数，Scrapy会从这里开始发起第一个请求。
-        """
-        # 伪造请求头，模拟浏览器访问
         headers = {
             'Referer': 'https://www.bilibili.com/v/popular/rank/all',
         }
-        # 构造初始请求URL，ps=20表示每页20条数据，pn=1表示第一页
+        # 热门接口
         yield scrapy.Request(
             url="https://api.bilibili.com/x/web-interface/popular?ps=20&pn=1",
-            callback=self.parse,  # 指定处理响应的函数
-            meta={'page_number': 1},  # 传递额外数据，这里用来记录页码
+            callback=self.parse,
+            meta={'page_number': 1},
             headers=headers
         )
 
     def parse(self, response):
-        """
-        这是处理服务器响应的核心函数。
-        它会解析返回的JSON数据，提取视频信息，并自动翻页。
-        """
         page_number = response.meta['page_number']
-        logging.info(f"--- 正在解析第 {page_number} 页 ---")
+        logging.info(f"--- Parsing Page {page_number} ---")
         
-        # 将响应体（JSON字符串）解析为Python字典
-        data = json.loads(response.body)
-        
-        # 检查API返回的数据是否正常
+        try:
+            data = json.loads(response.body)
+        except json.JSONDecodeError:
+            logging.error(f"Failed to decode JSON from {response.url}")
+            return
+
         if data.get('code') == 0 and data.get('data', {}).get('list'):
-            logging.info(f"成功获取第 {page_number} 页的数据。项目数量: {len(data['data']['list'])}")
+            video_list = data['data']['list']
+            logging.info(f"Got {len(video_list)} items on page {page_number}.")
             
-            # 遍历当前页的每一个视频数据
-            for video_data in data['data']['list']:
+            new_items_count = 0
+            
+            for video_data in video_list:
                 if self.crawled_count >= self.target_count:
                     break
+                
+                bvid = video_data.get('bvid')
+                
+                # 增量抓取检查
+                if self.incremental and bvid in self.seen_ids:
+                    logging.debug(f"Skipping existing video: {bvid}")
+                    continue
+
                 item = BilibiliScraperItem()
-                # 从API返回的数据中提取我们关心的字段
-                item['video_id'] = video_data.get('bvid')
+                item['video_id'] = bvid
                 item['title'] = video_data.get('title')
                 item['description'] = video_data.get('desc')
                 item['author'] = video_data.get('owner', {}).get('name')
@@ -72,26 +91,32 @@ class VideoSpider(scrapy.Spider):
                 item['favorite_count'] = video_data.get('stat', {}).get('favorite')
                 item['share_count'] = video_data.get('stat', {}).get('share')
                 item['comment_count'] = video_data.get('stat', {}).get('reply')
-                item['tags'] = [tag.get('tag_name') for tag in video_data.get('rcmd_reason', {}).get('tags', []) if tag]
-                item['category'] = video_data.get('tname')
-                item['top_comments'] = []  # 暂时不爬取评论
                 
-                # 使用yield将提取到的item交给Scrapy引擎处理（例如，保存到文件或数据库）
+                # 安全获取 tags
+                rcmd_reason = video_data.get('rcmd_reason')
+                if isinstance(rcmd_reason, dict):
+                     item['tags'] = [tag.get('tag_name') for tag in rcmd_reason.get('tags', []) if tag]
+                else:
+                    item['tags'] = []
+
+                item['category'] = video_data.get('tname')
+                item['top_comments'] = [] 
+                
                 self.crawled_count += 1
+                new_items_count += 1
                 yield item
 
-            # --- 翻页逻辑 ---
-            if self.crawled_count < self.target_count and page_number < self.max_pages and len(data['data']['list']) >= self.page_size:
+            # 翻页逻辑
+            # 如果是增量抓取，且当前页所有数据都是旧的，可能意味着后面也都是旧的（对于时间排序的列表），可以考虑提前停止
+            # 但热门列表不完全按时间，所以还是建议继续爬
+            if self.crawled_count < self.target_count and page_number < self.max_pages and len(video_list) >= self.page_size:
                 next_page_number = page_number + 1
-                logging.info(f"正在准备请求下一页: {next_page_number}")
                 next_page_url = f"https://api.bilibili.com/x/web-interface/popular?ps=20&pn={next_page_number}"
                 yield scrapy.Request(
                     url=next_page_url,
                     callback=self.parse,
                     meta={'page_number': next_page_number},
-                    headers=response.request.headers  # 将请求头传递给下一个请求
+                    headers=response.request.headers
                 )
         else:
-            # 如果API返回错误，记录错误日志
-            logging.error(f"获取第 {page_number} 页数据失败。 状态码: {data.get('code')}, 消息: {data.get('message')}")
-            logging.error(f"响应体内容: {response.body.decode('utf-8')}")
+            logging.error(f"Failed to fetch page {page_number}. Code: {data.get('code')}, Message: {data.get('message')}")
