@@ -6,6 +6,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 # 数据目录
 DATA_RAW_DIR = os.path.join(BASE_DIR, 'data', 'raw')
 DATA_PROCESSED_DIR = os.path.join(BASE_DIR, 'data', 'processed')
+CHROMA_DB_DIR = os.path.join(BASE_DIR, 'chroma_db')
 
 # 模型目录
 MODELS_TRAINED_DIR = os.path.join(BASE_DIR, 'models', 'trained')

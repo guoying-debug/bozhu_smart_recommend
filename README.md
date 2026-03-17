@@ -1,15 +1,16 @@
-# 博主智策：B站热门内容分析与选题辅助（Flask + Scrapy + BERT 聚类）
+# 博主智策：B站内容分析与 AI 运营助手 (RAG + Agentic Workflow)
 
-这个仓库把“爬热门数据 → 入库 → 聚类分析 → Web/API 展示 →（可选）预测播放量/标题建议”这一整条链路做成了可跑通的工程。
+本项目是一个工业级的 B 站自媒体运营辅助系统。它完整跑通了 **“数据采集 → 特征工程 → 机器学习预测 → 知识库构建 (RAG) → 智能体交互 (Agent)”** 的全链路落地流程。
 
-## 你能得到什么
+## 🌟 你能得到什么？
 
-- 热门内容聚类：对标题做 BERT 向量化，用 K-Means/DBSCAN 聚类，输出每个话题簇的关键词、Top 视频、播放量统计。
-- 可视化产物：t-SNE 聚类散点图、特征重要性条形图（保存在 [app/static/images](file:///f:/就业/项目/博主项目/app/static/images)）。
-- 选题辅助 API：预测播放量（回归）、预测分档（分类）、标题建议（LLM 智能体诊断 + 相似爆款 + 关键词）。
-- 一个无框架前端页面：直接调用后端 API 展示话题簇（[index.html](file:///f:/就业/项目/博主项目/app/templates/index.html)）。
+- **🤖 交互式 AI 运营助手**：基于 LangChain 和 Streamlit 构建的 Web Agent，支持多轮对话、动态工具调度（Tool Calling），为你提供个性化的标题优化与流量诊断。
+- **📊 混合检索增强 (RAG)**：摒弃传统词频匹配，采用 ChromaDB (Dense) + TF-IDF (Sparse) 双路召回引擎，并结合 Query Rewriting 与 HyDE 技术，精准挖掘历史爆款对标视频。
+- **📈 科学的流量预测模型**：非黑盒模型。结合岭回归 (Ridge) 与逻辑回归 (Logistic)，不仅能预测播放量分档，更能输出基于特征权重的结构化可解释报告 (XAI)。
+- **🧠 自动化数据洞察**：基于 BERT 向量化与 K-Means 自适应聚类，每天自动挖掘 B 站热门话题簇，并通过 Plotly 生成高维数据交互式大盘。
+- **🛠️ 企业级工程架构**：严格的 MVC 分层设计，内置 Pydantic 数据校验，支持 Docker-Compose 一键微服务化部署，并集成 Prometheus + Grafana 全链路监控。
 
-## 项目结构（工程化重构版）
+## 项目结构（重构版）
 
 本项目已采用**分层架构**进行重构，以提高代码的可维护性、复用性和扩展性。
 
@@ -19,24 +20,25 @@
 │   ├── api/                 # API 路由定义 (接口层)
 │   │   └── routes.py        # 定义 /api/topics, /api/predict_view 等路由
 │   ├── core/                # 核心业务逻辑 (业务层)
+│   │   ├── agent.py         # LangChain Agent 智能体核心逻辑 (工具调度与记忆)
 │   │   ├── analysis.py      # 聚类结果查询与摘要逻辑
 │   │   ├── predictor.py     # 播放量预测与分档模型推理
-│   │   ├── recommender.py   # 标题相似度推荐 (TF-IDF)
+│   │   ├── recommender.py   # RAG 混合检索 (ChromaDB 稠密 + TF-IDF 稀疏 + RRF)
 │   │   ├── scheduler.py     # 定时任务调度器 (APScheduler)
 │   │   ├── data_loader.py   # 数据加载与缓存 (Singleton)
 │   │   ├── config.py        # 统一路径与环境配置
-│   │   └── llm.py           # LLM 智能体接口 (DashScope/Qwen)
+│   │   └── llm.py           # LLM 接口及 Query Rewriting/HyDE 增强
 │   ├── models/              # 数据模型定义 (数据层)
 │   │   └── schemas.py       # Pydantic 模型 (Request/Response 校验)
 │   ├── utils/               # 通用工具函数 (基础层)
-│   │   ├── text_utils.py    # 分词、停用词、BERT 预处理、TF-IDF 关键词
+│   │   ├── text_utils.py    # 分词、停用词、BERT 预处理
 │   │   └── feature_utils.py # 标题特征工程、时间解析
 │   ├── static/              # 静态资源
 │   │   └── images/          # 可视化图表 (tsne.png, importance.png)
 │   ├── templates/           # 前端模板
-│   │   └── index.html       # 聚类展示页面
-│   ├── __init__.py          # Flask 应用工厂
-│   └── app.py               # (废弃/重构) 仅作为启动入口
+│   │   └── index.html       # 聚类与预测展示页面
+│   └── __init__.py          # Flask 应用工厂
+├── chroma_db/               # 本地向量数据库 (Chroma) 存储目录
 ├── data/                    # 数据存储
 │   ├── raw/                 # 原始数据 (output.json)
 │   └── processed/           # 处理后的结构化数据 (CSV)
@@ -48,139 +50,148 @@
 │   ├── load_data_to_db.py   # 数据入库 (JSON -> MySQL)
 │   ├── regenerate_importance_plot.py # 重新生成特征重要性图表 (RandomForest)
 │   ├── run_eda.py           # 运行探索性数据分析 (EDA) 并生成图表
-│   ├── topic_clustering.py  # 聚类分析脚本 (BERT + K-Means/DBSCAN)
-│   └── train_view_predictor.py # 训练播放量预测模型 (Ridge + Logistic)
+│   ├── topic_clustering.py  # 聚类分析脚本 (BERT 向量化 + ChromaDB入库 + K-Means)
+│   ├── train_view_predictor.py # 训练播放量预测模型 (Ridge + Logistic)
+│   └── evaluate_rag.py      # RAG 检索与生成质量评估 (RAGAS-style)
 ├── src/bilibili_scraper/    # Scrapy 爬虫项目
 │   ├── bilibili_scraper/
 │   │   ├── middlewares.py   # 随机 UA、代理中间件
 │   │   ├── pipelines.py     # 数据校验、增量写入
 │   │   ├── settings.py      # 反爬策略配置
 │   │   └── spiders/video.py # 增量爬虫
+├── app.py                   # Flask Web 服务启动入口
+├── web_agent.py             # Streamlit 智能体交互界面启动入口
+├── docker-compose.yml       # 容器化编排配置文件
+├── Dockerfile               # 容器镜像构建文件
 ├── openapi.yaml             # Coze/插件对接 API 定义
 ├── requirements.txt         # 项目依赖
 └── README.md
 ```
 
-## 核心改进 (面试重点)
+## 核心改进
 
-### 1. 架构重构 (Architecture Refactoring)
-- **分层设计**：将单文件 Flask 应用拆分为 `api` (路由), `core` (业务), `models` (数据), `utils` (工具) 四层，解耦了 HTTP 处理与核心算法。
-- **配置管理**：统一通过 `app.core.config` 管理路径与环境变量，消除了硬编码路径。
-- **数据流规范**：明确了 `data/raw` (原始), `data/processed` (清洗后), `models/trained` (模型) 的数据流向。
+### 1. RAG 架构与多路召回引擎 (RAG & Hybrid Retrieval)
+- **离线向量化入库 (Offline Vectorization)**：在数据处理流水线中引入 `transformers`，将清洗后的 B 站标题转化为高维稠密向量（BERT），并无缝写入 **ChromaDB** 向量数据库，构建高可用的离线特征集。
+- **混合检索策略 (Hybrid Retrieval)**：摒弃了单一的字面匹配，采用 **Dense (BERT + ChromaDB 语义检索)** 与 **Sparse (TF-IDF 关键词检索)** 的双路召回架构。结合 **RRF (倒数秩融合)** 算法重新打分，既保证了长尾冷门词的精确召回，又具备极强的语义泛化能力。
+- **检索前查询增强 (Query Enhancement)**：针对用户输入往往过于简短的问题，在 RAG 检索前置入 **Query Rewriting (大模型查询改写)** 和 **HyDE (假设性文档生成)** 技术。通过大模型生成“理想爆款标题”和“同义搜索词”去扩充检索空间，显著提升了相似视频的召回质量。
 
-### 2. 爬虫升级 (Robust Crawler)
-- **反爬策略**：
-    - **随机 User-Agent**：中间件每次请求随机切换浏览器指纹。
-    - **智能延迟**：`DOWNLOAD_DELAY=2` 配合随机抖动，模拟真人行为。
-    - **自动重试**：配置 `RETRY_TIMES=3`，自动处理 403/429/5xx 错误。
-- **增量抓取 (Incremental Crawling)**：
-    - 支持 `-a incremental=True` 参数，启动时自动加载已有 ID，跳过重复数据，极大降低对 B 站服务器的压力。
-- **数据校验 (Data Validation)**：
-    - 引入 `BilibiliDataValidationPipeline`，强制校验关键字段（`video_id`, `title`），自动修正数值类型，丢弃脏数据。
+### 2. 智能体工作流与交互 (Agentic Workflow & UI)
+- **Tool Calling 智能调度 (LangChain Agent)**：基于 **LangChain** 框架构建了核心运营 Agent。模型能够根据用户的自然语言意图，自主决策并调度不同的底层能力（如：触发闲聊引擎、调用预测回归模型、执行 RAG 检索与改写）。
+- **滑动窗口记忆机制 (Conversation Memory)**：为 Agent 注入 `ConversationBufferWindowMemory`，使其具备处理多轮复杂对话的能力。Agent 能够结合历史上下文进行精准微调。
+- **现代化交互界面 (Streamlit)**：摒弃了对非技术人员不友好的终端命令行，使用 **Streamlit** 构建了流畅的 ChatGPT 式 Web 交互界面，支持实时流式输出和状态提示，极大提升了产品的可用性和商业演示效果。
 
-### 3. 聚类分析优化 (Advanced Clustering)
-- **Auto-K Selection**：不再写死 `k=10`，而是通过计算 **轮廓系数 (Silhouette Score)** 自动寻找 `k=5~15` 范围内的最优聚类数。
-- **语义关键词 (Semantic Keywords)**：使用 **TF-IDF** 算法替代简单的词频统计，自动过滤通用停用词，提取更具代表性的簇标签。
-- **交互式可视化 (Interactive Viz)**：引入 **Plotly** 生成交互式 HTML 散点图，支持缩放、悬停查看视频详情，替代静态 PNG 图片。
-- **自动化闭环 (Automation)**：集成 **APScheduler**，每日凌晨 2 点自动运行聚类脚本，实现数据分析的自动更新。
+### 3. 数据流底座与爬虫工程 (Data Pipeline & Scrapy)
+- **反爬与高可用策略**：基于 Scrapy 框架开发了工业级爬虫，内置随机 User-Agent 轮换、智能延时抖动以及自动重试机制（拦截 403/429/5xx 状态码），保障了数据采集的高可用性。
+- **增量同步 (Incremental Crawling)**：支持通过指令（`-a incremental=True`）跳过数据库中已存在的 `video_id`，大幅降低带宽消耗与 B 站服务器压力。
+- **数据清洗与防御性编程**：在 Pipeline 中引入严格的数据校验机制，自动修正异常数值类型，丢弃脏数据，确保进入下游模型的都是高质量语料。
 
-### 4. 预测模型与建议优化 (Predictive Modeling & Advice)
-- **科学评估 (Rigorous Evaluation)**：引入 `train_test_split`，计算并输出 **MAE**、**RMSE**、**R2** 等多维度指标，并持久化保存评估报告。
-- **可解释性 (XAI)**：新增 **“分区定位”影响因子**（如知识区 vs 生活区的流量差异），并移除了不准确的“情绪词”分析，使预测解释更具针对性。
-- **智能体诊断 (Agentic Workflow)**：升级 `/api/title_advice`，引入 **LLM 智能体 (Qwen-Plus)**。不仅提供规则建议，还结合 **Random Forest 全局特征重要性** 和 **相似爆款**，生成深度标题诊断报告与差异化优化方案。
+### 4. 机器学习模型与可解释性 (Predictive Modeling & XAI)
+- **自适应聚类分析 (Auto-K Clustering)**：自动化探索最优聚类参数，通过计算**轮廓系数 (Silhouette Score)** 在 `K=5~15` 区间内动态寻优。结合 PCA 与 t-SNE 降维技术，利用 Plotly 生成高维数据的交互式可视化散点图。
+- **多特征融合预测 (Ridge & Logistic Regression)**：除了标题文本特征外，创新性地引入了“UP主历史数据均值”、“发布时间时段”以及“分区流量天花板”等结构化因子，构建了播放量连续值预测（回归）和爆款分档（分类）双模型。
+- **模型可解释性 (XAI)**：打破“黑盒”预测，模型在输出预估播放量的同时，能够基于特征工程的权重系数（如：标题长度、疑问句式、高优分区），输出结构化的分析理由，增强业务人员对预测结果的信任度。
 
-### 5. 工程化实践 (Engineering Practices)
-- **Pydantic 校验**：API 入参使用 Pydantic Model 进行严格校验，提升接口健壮性。
-- **复用性提升**：特征提取逻辑 (`app.utils.feature_utils`) 被训练脚本和在线预测 API 共享，避免 Training-Serving Skew。
-- **容器化部署 (Docker)**：提供 `Dockerfile` 和 `docker-compose.yml`，一键拉起 Flask + MySQL + Prometheus + Grafana。
-- **可观测性 (Observability)**：集成 **Prometheus** 监控指标，暴露 `/metrics` 端点，实时监控 QPS 和响应延迟。
+### 5. 工程化规范与云原生部署 (DevOps & Best Practices)
+- **领域驱动的分层架构**：将单体 Flask 应用重构为清晰的四层架构：`api`（路由层）、`core`（业务逻辑层）、`models`（数据模式层）、`utils`（基础工具层），实现高内聚低耦合。
+- **Pydantic 严格校验**：在 API 层面全面接入 Pydantic Model，对前后端交互数据进行强类型约束，提升接口健壮性。
+- **微服务容器化 (Docker Compose)**：编写了符合最佳实践的 `Dockerfile`，并使用 `docker-compose` 一键拉起 Web 服务、MySQL 数据库以及监控套件，实现了环境隔离与极速部署。
+- **可观测性监控体系 (Observability)**：无缝集成 **Prometheus** 暴露应用级指标，配合 **Grafana** 可视化大盘，实时监控核心 API 的 QPS、响应延迟及错误率，满足生产级运维需求。
 
-## 先决条件
+## 🚀 快速开始与运行指南
+
+### 0. 先决条件与环境安装
 
 - Python 3.9+（建议 3.10/3.11）
--（可选）MySQL 8.0+：只在你要“重新入库/重新聚类”时需要
-
-## 安装
+- MySQL 8.0+（如果需要跑离线数据处理流程）
+- 阿里云 DashScope API Key（用于启动 Agent）
 
 ```powershell
+# 1. 克隆项目并进入目录
 cd f:\就业\项目\博主项目
+
+# 2. 创建并激活虚拟环境
 python -m venv .venv
 .venv\Scripts\activate
+
+# 3. 安装核心依赖
 pip install -r requirements.txt
+
+# 4. 配置环境变量 (请替换为你的真实 Key)
+$env:DASHSCOPE_API_KEY="sk-xxxxxx"
+$env:DB_PASSWORD="你的数据库密码"
 ```
 
-## 运行指南
+### 1. 体验核心功能：启动 Agent 智能体交互界面
+这是本项目对最终用户最友好的入口。我们提供了一个基于 Streamlit 构建的 ChatGPT 风格 Web 界面。
 
-### 1. 启动 Web 服务 (API & Dashboard)
+**启动命令：**
+```powershell
+streamlit run web_agent.py
+```
+**你能得到什么：** 
+浏览器会自动打开 `http://localhost:8501`。
+**你可以干什么：**
+- 直接向 Agent 提问：“帮我预测一下这个标题的播放量：Python爬虫3天速成”。
+- 要求 Agent 进行诊断：“帮我优化这个标题：去三亚旅游的vlog，要求侧重穷游党”。
+- Agent 会自动思考，调用底层的机器学习模型或 RAG 检索系统，并用自然语言将专业建议反馈给你。
 
-Web 服务启动时会自动初始化调度器，每日定时更新聚类结果。
+### 2. 开发者后台：启动 Flask Web API & 监控大盘
+如果你是前端开发人员或需要直接调用接口，可以启动 Flask 后端。
 
+**启动命令：**
 ```powershell
 python app.py
 ```
-访问 http://127.0.0.1:5000 查看聚类结果或调用 API。
+**你能得到什么：**
+- 浏览器访问 `http://127.0.0.1:5000` 可以看到 B 站热门话题聚类（K-Means/DBSCAN）的 3D 散点图和数据大盘。
+- 提供了 `/api/predict_view` 和 `/api/title_advice` 等 RESTful API 供前端或第三方应用（如飞书机器人、Coze 插件）调用。
+- 后台会自动启动 `APScheduler`，每天凌晨自动更新聚类数据。
 
-### 2. 运行爬虫 (支持增量)
+### 3. 数据工程师：离线流水线与 RAG 评测
+如果你想从零开始构建数据，或者重新训练模型，请按顺序执行以下离线脚本：
 
+**步骤 A：数据采集**
 ```powershell
 cd src\bilibili_scraper
-# 首次全量抓取
-scrapy crawl video -a target_count=1000 -O output.json
-
-# 后续增量抓取 (跳过已抓取的 ID)
-scrapy crawl video -a incremental=True -a target_count=1000
+scrapy crawl video -a target_count=1000 -O output.json # 全量抓取
+scrapy crawl video -a incremental=True -a target_count=1000 # 增量抓取
 ```
-注意：Scrapy 命令必须在 `src/bilibili_scraper` 目录下运行。
+*产出：最新 B 站热门视频元数据（JSON 格式）。*
 
-### 3. 数据处理与建模
-
-脚本运行需要设置数据库密码（若未写入环境变量）。
-
+**步骤 B：特征提取与模型训练**
 ```powershell
-# 临时设置环境变量 (仅当前会话有效)
-$env:DB_PASSWORD = "你的数据库密码"
-
-# 1. 聚类分析 (依赖 MySQL)
+# 1. BERT 聚类分析与 ChromaDB 向量入库
 python scripts/topic_clustering.py
 
-# 2. 训练预测模型 (依赖 MySQL)
+# 2. 训练播放量预测双模型 (回归+分类)
 python scripts/train_view_predictor.py
 ```
+*产出：更新 `models/trained/` 目录下的 `.joblib` 模型权重文件，并生成最新的 `chroma_db/` 本地向量库供在线 RAG 检索使用。*
 
-### 4. 容器化部署 (Docker Compose)
+**步骤 C：自动化质量评估**
+```powershell
+# 运行 RAG 系统的 Recall 指标与 LLM-as-a-Judge 评估
+python scripts/evaluate_rag.py
+```
+*产出：在终端输出当前检索系统的 Recall@K 命中率，以及大模型生成的诊断建议的质量打分（1-5分）。用于验证你修改 Prompt 或更换 Embedding 模型后，系统效果是变好了还是变差了。*
 
-如果你想一键启动整个微服务架构（包含 MySQL、Prometheus 监控）：
+### 4. 生产级部署：Docker 容器化架构
+如果你想一键启动包含 数据库、Web服务、监控体系的完整微服务架构：
 
 ```powershell
-# 修改 docker-compose.yml 中的数据库密码
+# 修改 docker-compose.yml 中的环境变量后执行：
 docker-compose up -d --build
 ```
-- Web 应用: http://localhost:5000
-- Grafana 监控: http://localhost:3000 (默认 admin/admin)
-- Prometheus: http://localhost:9090
+**架构全貌：**
+- **业务服务**: `http://localhost:5000`
 
-**注意**：如果你想在测试完后释放空间，请运行以下命令清理所有容器和镜像：
+*(如需清理环境，可执行：`docker-compose down --rmi all`)*
+
+## 📚 接口文档与外网暴露
+
+本项目的接口完全符合 OpenAPI 3.0 规范，详细定义见根目录的 [`openapi.yaml`](file:///f:/就业/项目/博主项目/openapi.yaml)。
+
+如果需要将本地服务暴露给外部（例如对接字节 Coze 插件），可以使用 Cloudflare Tunnel：
 ```powershell
-docker-compose down --rmi all
-docker system prune -f
-```
-
-
-## API 使用
-
-接口定义见 [openapi.yaml](file:///f:/就业/项目/博主项目/openapi.yaml)。
-
-- GET /api/topics：话题簇列表
-- POST /api/predict_view：预测播放量 (含 `explanations` 解释)
-- POST /api/title_advice：标题建议 (含 `advice_list` 优化建议)
-
-PowerShell 示例：
-
-```powershell
-Invoke-RestMethod -Method Post http://127.0.0.1:5000/api/title_advice `
-  -ContentType "application/json" `
-  -Body (@{ title="新手入门：3天做出爆款视频？"; category="知识" } | ConvertTo-Json)
-```
-# 内网穿透
 cd F:\cloudflared
 .\cloudflared.exe tunnel --url http://localhost:5000
+```

@@ -94,3 +94,71 @@ def analyze_title_with_llm(title: str, category: str, predicted_view: float,
             "diagnosis": "分析过程发生错误。",
             "suggestions": []
         }
+
+def generate_search_queries(title: str, n=3):
+    """
+    RAG Query Rewriting: 生成多个搜索查询以提升检索召回率。
+    """
+    if not dashscope.api_key:
+        return [title]
+
+    prompt = f"""
+    请根据用户输入的视频标题，生成 {n} 个用于检索相似爆款视频的搜索查询词。
+    
+    输入标题：{title}
+    
+    要求：
+    1. 提取核心关键词。
+    2. 生成同义词或相关话题的变体。
+    3. 输出格式必须是纯 JSON 字符串列表，例如：["查询1", "查询2", "查询3"]。
+    """
+    
+    try:
+        response = Generation.call(
+            model=Generation.Models.qwen_plus,
+            prompt=prompt,
+            result_format='message'
+        )
+        if response.status_code == 200:
+            content = response.output.choices[0].message.content
+            content = content.replace("```json", "").replace("```", "").strip()
+            try:
+                queries = json.loads(content)
+                if isinstance(queries, list):
+                    return queries
+            except:
+                pass
+        return [title]
+    except Exception as e:
+        logger.error(f"Query Rewrite failed: {e}")
+        return [title]
+
+def generate_hyde_doc(title: str):
+    """
+    HyDE (Hypothetical Document Embeddings): 生成假设性的爆款标题/描述用于检索。
+    """
+    if not dashscope.api_key:
+        return title
+
+    prompt = f"""
+    请针对以下视频标题，写一个假设性的、在该领域非常爆款的视频标题和简短描述。
+    
+    输入标题：{title}
+    
+    输出要求：
+    1. 风格要吸引人，符合 B 站爆款调性。
+    2. 不要包含解释性文字，直接输出假设的标题和描述。
+    """
+    
+    try:
+        response = Generation.call(
+            model=Generation.Models.qwen_plus,
+            prompt=prompt,
+            result_format='message'
+        )
+        if response.status_code == 200:
+            return response.output.choices[0].message.content.strip()
+        return title
+    except Exception as e:
+        logger.error(f"HyDE generation failed: {e}")
+        return title

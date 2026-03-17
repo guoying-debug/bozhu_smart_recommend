@@ -1,6 +1,9 @@
 import pandas as pd
 from sqlalchemy import create_engine
 import os
+# 设置 Hugging Face 镜像，解决连接超时问题
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
+
 import sys
 import jieba
 from sklearn.cluster import KMeans, DBSCAN
@@ -16,6 +19,7 @@ import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
+import chromadb
 
 # 添加项目根目录到 sys.path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -24,7 +28,7 @@ sys.path.append(BASE_DIR)
 from app.core.config import (
     get_database_url, DATA_PROCESSED_DIR, MODELS_TRAINED_DIR, IMAGES_DIR,
     BERT_EMBEDDINGS_PATH, BERT_KMEANS_MODEL_PATH, BERT_DBSCAN_MODEL_PATH,
-    DATA_PATH
+    DATA_PATH, CHROMA_DB_DIR
 )
 from app.utils.text_utils import preprocess_text_for_bert
 
@@ -170,6 +174,75 @@ def analyze_feature_importance(df):
     print(f"\n特征重要性图表已保存到: {filepath}")
     print("-" * 50)
 
+# --- ChromaDB 向量存储 ---
+def save_to_chroma(df, embeddings):
+    """
+    将视频数据和 BERT 向量存入 ChromaDB，用于在线检索。
+    """
+    print("\n--- 开始将数据存入 ChromaDB ---")
+    print(f"ChromaDB 存储路径: {CHROMA_DB_DIR}")
+    
+    # 确保目录存在
+    os.makedirs(CHROMA_DB_DIR, exist_ok=True)
+    
+    # 初始化 Chroma 客户端
+    client = chromadb.PersistentClient(path=CHROMA_DB_DIR)
+    
+    collection_name = "bilibili_videos"
+    
+    # 获取或创建集合 (如果存在先删除以确保全量更新)
+    try:
+        client.delete_collection(name=collection_name)
+        print(f"已删除旧集合: {collection_name}")
+    except Exception:
+        pass # 集合不存在或其他错误，忽略
+
+        
+    collection = client.create_collection(name=collection_name)
+    print(f"已创建新集合: {collection_name}")
+    
+    # 准备数据
+    ids = df['video_id'].astype(str).tolist()
+    documents = df['title'].fillna("").astype(str).tolist()
+    
+    # 准备 Metadata
+    metadatas = []
+    for _, row in df.iterrows():
+        meta = {
+            "title": str(row['title']),
+            "view_count": int(row['view_count']) if pd.notnull(row['view_count']) else 0,
+            "category": str(row['category']) if pd.notnull(row['category']) else "未分类",
+            "cluster_id": int(row.get('bert_kmeans_cluster', -1)),
+            "video_id": str(row['video_id'])
+        }
+        metadatas.append(meta)
+    
+    # 批量插入
+    batch_size = 100
+    total = len(ids)
+    
+    print(f"正在插入 {total} 条向量数据...")
+    embeddings_list = embeddings.tolist()
+    
+    for i in range(0, total, batch_size):
+        end = min(i + batch_size, total)
+        batch_ids = ids[i:end]
+        batch_embeddings = embeddings_list[i:end]
+        batch_metadatas = metadatas[i:end]
+        batch_documents = documents[i:end]
+        
+        collection.add(
+            ids=batch_ids,
+            embeddings=batch_embeddings,
+            metadatas=batch_metadatas,
+            documents=batch_documents
+        )
+        if (i // batch_size) % 5 == 0:
+            print(f"  已处理 {end}/{total} 条")
+            
+    print("ChromaDB 数据入库完成。")
+    print("-" * 50)
+
 
 def perform_clustering():
     """
@@ -278,6 +351,9 @@ def perform_clustering():
         
         # 10. 特征重要性分析
         analyze_feature_importance(df)
+        
+        # 11. 向量入库 (ChromaDB)
+        save_to_chroma(df, text_vectors)
 
     except Exception as e:
         import traceback
