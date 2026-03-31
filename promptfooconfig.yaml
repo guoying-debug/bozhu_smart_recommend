@@ -1,0 +1,88 @@
+# promptfoo 评测配置
+# 用法：npx promptfoo eval
+# 文档：https://promptfoo.dev/docs
+
+description: 博主智策 Prompt 质量评测
+
+# 被测 prompt 列表（对应 prompts/ 目录下的文件）
+prompts:
+  - file://prompts/title_optimize.txt
+  - file://prompts/llm_analyze_title.txt
+  - file://prompts/query_rewrite.txt
+  - file://prompts/hyde_doc.txt
+
+# 评测使用的模型
+providers:
+  - id: openai:chat:qwen-plus
+    config:
+      apiBaseUrl: https://dashscope.aliyuncs.com/compatible-mode/v1
+      apiKeyEnvar: DASHSCOPE_API_KEY
+      temperature: 0.7
+      max_tokens: 2000
+      timeout: 60000  # 60秒超时
+      request:
+        timeout: 60000
+
+# 测试用例
+tests:
+
+  # === title_optimize.txt 测试 ===
+  - description: "标题优化 - 纯小白Python教程"
+    vars:
+      docs: |
+        - Python入门：3天学会数据分析｜手把手教学（23万播放）
+        - 零基础学Python，这一套够了（41万播放）
+      query: "帮我优化标题：Python基础教程，侧重纯小白"
+    assert:
+      - type: llm-rubric
+        value: 输出必须包含3条优化建议，每条有具体修改示例，且体现小白友好性
+        threshold: 0.8
+      - type: not-contains
+        value: "我不知道"
+
+  - description: "标题优化 - 搞笑风格"
+    vars:
+      docs: |
+        - 我用AI写了一首歌，结果把自己笑哭了（88万播放）
+      query: "优化标题：AI绘画教程，要搞笑一点"
+    assert:
+      - type: llm-rubric
+        value: 输出风格应带有幽默感，并给出3条具体标题建议
+        threshold: 0.7
+
+  # === llm_analyze_title.txt 测试 ===
+  - description: "标题诊断 - 返回合法 JSON"
+    vars:
+      title: "Python教程"
+      category: "知识"
+      predicted_view: "3200"
+      feature_explanations: "- 标题长度: 负向 (标题偏短，信息量不足)"
+      global_importance: "- view_count: 0.4521"
+      similar_titles: "- Python入门到精通（12万播放）"
+    assert:
+      - type: is-json
+      - type: javascript
+        value: output.diagnosis && Array.isArray(output.suggestions) && output.suggestions.length === 3
+      - type: llm-rubric
+        value: diagnosis 字段要指出标题的具体缺陷，suggestions 要给出3个可用的改进标题
+        threshold: 0.8
+
+  # === query_rewrite.txt 测试 ===
+  - description: "Query改写 - 返回3个查询"
+    vars:
+      title: "Python自动化办公教程"
+    assert:
+      - type: is-json
+      - type: javascript
+        value: Array.isArray(JSON.parse(output)) && JSON.parse(output).length === 3
+
+  # === hyde_doc.txt 测试 ===
+  - description: "HyDE - 生成爆款假设文档"
+    vars:
+      title: "Excel技巧大全"
+    assert:
+      - type: llm-rubric
+        value: 输出是一个吸引人的B站风格标题和简短描述，不含解释性文字
+        threshold: 0.75
+      - type: javascript
+        value: output.length > 10

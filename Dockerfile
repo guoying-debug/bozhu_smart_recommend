@@ -25,9 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 # 安装 Python 依赖
-# 增加 gunicorn 和 prometheus-client
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir gunicorn prometheus-flask-exporter
+# gunicorn 和 prometheus-flask-exporter 已统一写入 requirements.txt，此处无需重复安装
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制项目代码
 COPY . .

@@ -8,6 +8,19 @@ if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
 from app.core.agent import run_bilibili_agent
+from app.core.predictor import load_models
+from app.core.data_loader import load_data
+
+# 初始化：加载模型和数据（仅执行一次）
+@st.cache_resource
+def init_app():
+    """应用启动时初始化所有资源"""
+    load_data()      # 加载数据
+    load_models()    # 加载预测模型
+    return True
+
+# 执行初始化
+init_app()
 
 # 页面配置
 st.set_page_config(

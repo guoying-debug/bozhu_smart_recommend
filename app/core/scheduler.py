@@ -5,9 +5,8 @@ import logging
 import subprocess
 import os
 
-# 配置日志
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# 不在模块顶层调用 logging.basicConfig，避免覆盖应用工厂已配置的日志格式。
+# 日志配置统一由 app/__init__.py（应用工厂）负责。
 logger = logging.getLogger(__name__)
 
 def run_clustering_task():

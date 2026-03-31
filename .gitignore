@@ -112,3 +112,48 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# ===== 项目特定敏感信息 =====
+# 环境变量配置文件
+.env
+.env.local
+.env.*.local
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 数据文件（可能包含真实用户数据）
+data/raw/*.json
+data/processed/*.csv
+src/bilibili_scraper/output*.json
+
+# 模型文件（体积大）
+models/trained/*.pkl
+models/trained/*.joblib
+models/trained/*.npy
+models/trained/*.h5
+
+# 向量数据库（体积大）
+chroma_db/
+
+# 配置文件中的密码
+config/*password*
+config/*secret*
+
+# IDE 配置（可能包含路径信息）
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db

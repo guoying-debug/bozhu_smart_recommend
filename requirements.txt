@@ -31,3 +31,9 @@ langchain-core==0.3.83
 langchain-openai==0.3.35
 chromadb==0.6.3
 streamlit==1.32.2
+# Web 服务器与监控（原本只在 Dockerfile 里单独安装，统一移入此处保证环境一致）
+gunicorn==23.0.0
+prometheus-flask-exporter==0.23.1
+# 测试框架
+pytest==8.0.0
+pytest-mock==3.12.0

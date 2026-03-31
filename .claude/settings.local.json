@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd /c dir \"F:\\\\就业\\\\项目\\\\项目拷打\\\\博主项目\")",
+      "Bash(powershell -Command \"Get-ChildItem 'F:\\\\就业\\\\项目\\\\项目拷打\\\\博主项目' | Format-Table Name, LastWriteTime, Length\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'F:/就业/项目/项目拷打/博主项目' -Recurse -Depth 4 | Where-Object { $_.FullName -notmatch 'node_modules|.git|__pycache__|.venv|dist|.next' } | Select-Object FullName | Format-List\")",
+      "Bash(find . -maxdepth 5 -not -path */node_modules/* -not -path */.git/* -not -path */__pycache__/*)",
+      "Bash(echo exit:$?)",
+      "Bash(find . -name package.json -not -path */node_modules/*)",
+      "Bash(set:*)",
+      "Bash(printenv:*)",
+      "Bash(echo:*)",
+      "Bash(dir:*)"
+    ]
+  }
+}

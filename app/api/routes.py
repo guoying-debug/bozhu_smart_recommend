@@ -5,6 +5,13 @@ from app.core.recommender import get_similar_titles
 from app.core.llm import analyze_title_with_llm
 from app.models.schemas import PredictRequest, PredictViewResponse, PredictBucketResponse, ErrorResponse
 from pydantic import ValidationError
+import plotly.graph_objects as go
+import plotly.express as px
+from app.core.data_loader import load_data
+import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.manifold import TSNE
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -106,5 +113,46 @@ def api_title_advice():
             "diagnosis": diagnosis, # 新增诊断字段
             "summary": f"为您找到 {len(similar_titles)} 个相似热门标题，建议结合参考。"
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@api_bp.route('/visualize/kmeans', methods=['GET'])
+def visualize_kmeans():
+    """动态生成 K-Means 聚类 t-SNE 可视化"""
+    try:
+        df = load_data()
+        if df is None or 'tsne_x' not in df.columns:
+            return jsonify({"error": "数据未加载或缺少聚类坐标"}), 500
+
+        # 使用正确的列名
+        cluster_col = 'bert_kmeans_cluster' if 'bert_kmeans_cluster' in df.columns else 'Cluster_Label'
+
+        fig = px.scatter(
+            df, x='tsne_x', y='tsne_y', color=cluster_col,
+            hover_data=['title', 'view_count'],
+            title='B站热门话题聚类分布 (t-SNE)',
+            labels={cluster_col: '话题簇', 'tsne_x': 't-SNE 维度1', 'tsne_y': 't-SNE 维度2'}
+        )
+        fig.update_traces(marker=dict(size=8, opacity=0.7))
+        return fig.to_html(full_html=False, include_plotlyjs='cdn')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@api_bp.route('/visualize/feature_importance', methods=['GET'])
+def visualize_feature_importance():
+    """动态生成特征重要性图"""
+    try:
+        importance = get_feature_importance()
+        if not importance:
+            return jsonify({"error": "特征重要性数据未加载"}), 500
+
+        df_imp = pd.DataFrame(importance).head(15)
+        fig = px.bar(
+            df_imp, x='score', y='feature', orientation='h',
+            title='播放量预测模型 - 特征重要性 Top 15',
+            labels={'score': '重要性分数', 'feature': '特征名称'}
+        )
+        fig.update_layout(yaxis={'categoryorder':'total ascending'})
+        return fig.to_html(full_html=False, include_plotlyjs='cdn')
     except Exception as e:
         return jsonify({"error": str(e)}), 500

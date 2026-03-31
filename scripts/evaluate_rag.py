@@ -14,7 +14,7 @@ sys.path.append(BASE_DIR)
 # Set HF Mirror
 os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 
-from app.core.data_loader import get_data
+from app.core.data_loader import load_data
 from app.core.recommender import get_similar_titles, init_recommender
 from app.core.llm import analyze_title_with_llm, dashscope
 from dashscope import Generation
@@ -33,7 +33,7 @@ def evaluate_retrieval(sample_size=20):
     print(f"🚀 Starting Retrieval Evaluation (Sample Size: {sample_size})")
     print("="*50)
     
-    df = get_data()
+    df = load_data()
     if df is None or df.empty:
         print("Error: No data found.")
         return
@@ -136,7 +136,7 @@ def evaluate_generation(sample_size=5):
     print(f"🧠 Starting Generation Evaluation (LLM-as-a-Judge) (Sample Size: {sample_size})")
     print("="*50)
     
-    df = get_data()
+    df = load_data()
     sample_df = df.sample(n=min(sample_size, len(df)), random_state=99)
     
     total_score = 0

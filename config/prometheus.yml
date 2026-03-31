@@ -1,7 +1,8 @@
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: 'bilibili_app'
+  - job_name: 'flask_app'
     static_configs:
       - targets: ['web:5000']

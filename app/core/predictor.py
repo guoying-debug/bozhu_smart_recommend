@@ -98,11 +98,11 @@ def explain_prediction(model, input_df, numeric_cols):
         return [{"feature": "分析服务", "effect": "未知", "reason": "暂时无法生成详细报告"}]
 
 def predict_view(req: PredictRequest):
+    # 【修复】删除函数内部的懒加载逻辑（原本调用 load_models()）。
+    # 职责统一由 app/__init__.py 的 create_app() 负责预加载；
+    # 若模型未加载则抛出明确异常，而非悄悄重试。
     if _VIEW_PREDICTOR is None:
-        load_models()
-    
-    if _VIEW_PREDICTOR is None:
-        raise RuntimeError("播放量预测模型未加载")
+        raise RuntimeError("播放量预测模型未加载，请确认 load_models() 已在应用启动时调用")
         
     model = _VIEW_PREDICTOR["model"]
     artifact = _VIEW_PREDICTOR["artifact"]
@@ -121,11 +121,9 @@ def predict_view(req: PredictRequest):
     return pred_view, bucket_id, bucket_name(bucket_id), explanations
 
 def predict_bucket(req: PredictRequest):
+    # 【修复】同 predict_view，删除内部懒加载，统一由应用工厂负责。
     if _VIEW_BUCKET_CLASSIFIER is None:
-        load_models()
-
-    if _VIEW_BUCKET_CLASSIFIER is None:
-        raise RuntimeError("分档分类模型未加载")
+        raise RuntimeError("分档分类模型未加载，请确认 load_models() 已在应用启动时调用")
         
     model = _VIEW_BUCKET_CLASSIFIER["model"]
     artifact = _VIEW_BUCKET_CLASSIFIER["artifact"]

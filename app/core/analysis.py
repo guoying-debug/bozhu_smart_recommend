@@ -1,6 +1,6 @@
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from app.core.data_loader import get_data
+from app.core.data_loader import load_data
 from app.utils.text_utils import top_keywords_from_titles
 
 _FEATURE_IMPORTANCE_CACHE = None
@@ -10,7 +10,7 @@ def get_feature_importance():
     if _FEATURE_IMPORTANCE_CACHE is not None:
         return _FEATURE_IMPORTANCE_CACHE
         
-    df = get_data()
+    df = load_data()
     if df is None:
         return []
         
@@ -47,7 +47,7 @@ def get_feature_importance():
         return []
 
 def get_cluster_summary():
-    df = get_data()
+    df = load_data()
     if df is None:
         return {}
         
@@ -71,7 +71,7 @@ def get_cluster_summary():
     return summary
 
 def get_topics_list():
-    df = get_data()
+    df = load_data()
     if df is None:
         return []
         

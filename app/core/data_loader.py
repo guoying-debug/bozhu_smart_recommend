@@ -34,5 +34,5 @@ def load_data():
             
     return _DF
 
-def get_data():
-    return load_data()
+# 【删除】原有的 get_data() 只是 load_data() 的透传包装，无任何额外逻辑，
+# 统一使用 load_data() 即可，减少重复入口带来的迷惑性。

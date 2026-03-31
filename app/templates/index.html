@@ -109,13 +109,11 @@
         <div class="grid-row">
             <div class="grid-col">
                 <h3>话题分布图 (t-SNE)</h3>
-                <iframe src="/static/images/kmeans_tsne_interactive.html" style="width:100%; height:500px; border:none;"></iframe>
-                <!-- 兼容旧版静态图 -->
-                <img src="/static/images/kmeans_tsne_visualization.png" onerror="this.style.display='none'" alt="Static t-SNE">
+                <iframe src="/api/visualize/kmeans" style="width:100%; height:500px; border:none;"></iframe>
             </div>
             <div class="grid-col">
                 <h3>特征重要性</h3>
-                <img src="/static/images/feature_importance.png" style="width:100%;" alt="Feature Importance">
+                <iframe src="/api/visualize/feature_importance" style="width:100%; height:500px; border:none;"></iframe>
             </div>
         </div>
     </div>

@@ -14,8 +14,15 @@ services:
       - DB_USER=root
       - DB_PASSWORD=root_password
       - DB_NAME=bilibili_data
+    volumes:
+      # 将宿主机的模型/数据/向量库挂载进容器，避免容器内找不到训练产物
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./chroma_db:/app/chroma_db
     depends_on:
-      - db
+      # 改用 service_healthy，等 db 真正就绪后再启动，否则 Flask 启动时连接失败
+      db:
+        condition: service_healthy
     networks:
       - bilibili_net
 
@@ -31,10 +38,18 @@ services:
       - MYSQL_DATABASE=bilibili_data
     volumes:
       - db_data:/var/lib/mysql
+      # init_db.sql 现在是真实文件（原来是空目录，导致容器启动报错）
       - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - bilibili_net
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    # healthcheck 确保 web 服务等 db 真正就绪后才启动，避免连接失败
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # 3. 监控服务: Prometheus
   prometheus:

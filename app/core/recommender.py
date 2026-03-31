@@ -1,6 +1,4 @@
 import os
-# 设置 Hugging Face 镜像，解决连接超时问题
-os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 
 import pandas as pd
 import numpy as np
@@ -10,7 +8,7 @@ import torch
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import jieba
-from app.core.data_loader import get_data
+from app.core.data_loader import load_data
 from app.core.config import CHROMA_DB_DIR
 from app.core.llm import generate_search_queries, generate_hyde_doc
 from app.utils.text_utils import get_stopwords
@@ -30,7 +28,11 @@ def init_recommender():
     """
     global _CHROMA_CLIENT, _CHROMA_COLLECTION, _BERT_TOKENIZER, _BERT_MODEL, _DEVICE
     global _TFIDF_VECTORIZER, _TFIDF_MATRIX, _TITLES_LIST
-    
+
+    # 设置 Hugging Face 镜像：放在函数内而非模块顶层，
+    # 避免 import 时污染全局环境（影响其他不需要此镜像的模块）
+    os.environ.setdefault('HF_ENDPOINT', 'https://hf-mirror.com')
+
     # 1. 初始化 ChromaDB
     if _CHROMA_CLIENT is None:
         print(f"正在连接 ChromaDB (路径: {CHROMA_DB_DIR})...")
@@ -78,7 +80,7 @@ def init_recommender():
     # 3. 初始化 TF-IDF (Sparse Retrieval)
     if _TFIDF_VECTORIZER is None:
         print("正在构建 TF-IDF 索引 (Sparse Retrieval)...")
-        df = get_data()
+        df = load_data()
         if df is not None and not df.empty:
             stopwords = get_stopwords()
             def tokenizer(text):
@@ -162,7 +164,7 @@ def _sparse_search(queries, top_k=10):
         return {}
         
     results_map = {}
-    df = get_data()
+    df = load_data()
     
     for query in queries:
         try:
@@ -248,7 +250,7 @@ def get_similar_titles(title: str, top_k=5):
     search_queries = [title]
     
     # 使用 LLM 生成改写查询 (Query Rewriting)
-    rewritten_queries = generate_search_queries(title, n=2)
+    rewritten_queries = generate_search_queries(title)
     if rewritten_queries:
         print(f"LLM 改写查询: {rewritten_queries}")
         search_queries.extend(rewritten_queries)
@@ -283,7 +285,7 @@ def get_fallback_recommendations(top_k=5):
     兜底策略：如果向量检索失败，返回热门视频。
     """
     print("触发兜底推荐策略...")
-    df = get_data()
+    df = load_data()
     if df is None or df.empty:
         return []
         

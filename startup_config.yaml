@@ -1,0 +1,22 @@
+# 博主智策 - 启动配置文件
+
+# 是否在启动时抓取新数据
+ENABLE_CRAWL: true
+
+# 爬虫配置
+CRAWL_TARGET_COUNT: 500  # 每次抓取目标数量
+CRAWL_INCREMENTAL: true  # 是否增量抓取（跳过已存在的视频）
+
+# 是否重新训练模型
+RETRAIN_MODEL: true
+
+# 是否重新生成聚类
+REGENERATE_CLUSTERING: true
+
+# Web 服务配置
+WEB_HOST: "127.0.0.1"
+WEB_PORT: 5000
+WEB_DEBUG: false
+
+# 如果某步骤失败，是否继续执行后续步骤
+CONTINUE_ON_ERROR: true
