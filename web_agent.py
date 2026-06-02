@@ -43,7 +43,7 @@ st.markdown("""
 
 # 侧边栏
 with st.sidebar:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Bilibili_logo.svg/1024px-Bilibili_logo.svg.png", width=150)
+    st.image("https://www.bilibili.com/favicon.ico", width=64)
     st.title("🤖 运营智能助手")
     st.markdown("""
     这是一个基于 **LangChain** + **DashScope (Qwen)** 构建的 B 站运营 Agent。
