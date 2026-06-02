@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 import yaml
 import getpass
+from dotenv import load_dotenv
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,6 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 def setup_environment():
     """交互式设置环境变量"""
@@ -24,10 +26,10 @@ def setup_environment():
     print("="*60)
 
     # 检查并设置 API Key
-    if not os.getenv("DASHSCOPE_API_KEY"):
-        api_key = input("请输入阿里云 DashScope API Key: ").strip()
+    if not (os.getenv("ZHIPU_API_KEY") or os.getenv("ZHIPUAI_API_KEY") or os.getenv("LLM_API_KEY")):
+        api_key = input("请输入智谱 API Key: ").strip()
         if api_key:
-            os.environ["DASHSCOPE_API_KEY"] = api_key
+            os.environ["ZHIPU_API_KEY"] = api_key
         else:
             logger.warning("未设置 API Key，LLM 功能将不可用")
 

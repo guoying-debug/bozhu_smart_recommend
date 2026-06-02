@@ -1,25 +1,44 @@
-import os
 import json
-import dashscope
-from dashscope import Generation
 import logging
+from openai import OpenAI
 
 # 【重构】prompt 模板已迁移至 prompts/ 目录，通过 loader 加载，与业务逻辑解耦。
 from prompts.loader import load_prompt
+from app.core.config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
 
 logger = logging.getLogger(__name__)
 
-dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+_llm_client = None
+
+
+def _get_llm_client():
+    global _llm_client
+    if _llm_client is None and LLM_API_KEY:
+        _llm_client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
+    return _llm_client
+
+
+def _invoke_text_llm(prompt: str) -> str:
+    client = _get_llm_client()
+    if client is None:
+        raise RuntimeError("未配置 LLM_API_KEY/ZHIPU_API_KEY")
+
+    response = client.chat.completions.create(
+        model=LLM_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+    )
+    return (response.choices[0].message.content or "").strip()
 
 
 def analyze_title_with_llm(title: str, category: str, predicted_view: float,
                            feature_explanations: list, similar_titles: list, feature_importance: list = None):
     """
-    使用通义千问 (qwen-plus) 对标题进行深度分析和优化建议。
+    使用大模型对标题进行深度分析和优化建议。
     将传统模型的预测结果、特征解释、相似爆款作为 Context 提供给 LLM。
     """
-    if not dashscope.api_key:
-        logger.warning("未检测到 DASHSCOPE_API_KEY，跳过 LLM 分析")
+    if not LLM_API_KEY:
+        logger.warning("未检测到 LLM_API_KEY/ZHIPU_API_KEY，跳过 LLM 分析")
         return {
             "analysis": "未配置 LLM 服务，无法生成深度分析。",
             "suggestions": ["请检查环境变量配置"]
@@ -49,22 +68,13 @@ def analyze_title_with_llm(title: str, category: str, predicted_view: float,
     )
 
     try:
-        response = Generation.call(
-            model=Generation.Models.qwen_plus,
-            prompt=prompt,
-            result_format='message'
-        )
-        if response.status_code == 200:
-            content = response.output.choices[0].message.content
-            content = content.replace("```json", "").replace("```", "").strip()
-            try:
-                result = json.loads(content)
-                return result
-            except json.JSONDecodeError:
-                return {"diagnosis": content, "suggestions": []}
-        else:
-            logger.error(f"LLM API 调用失败: {response.status_code} - {response.message}")
-            return {"diagnosis": "LLM 服务异常", "suggestions": []}
+        content = _invoke_text_llm(prompt)
+        content = content.replace("```json", "").replace("```", "").strip()
+        try:
+            result = json.loads(content)
+            return result
+        except json.JSONDecodeError:
+            return {"diagnosis": content, "suggestions": []}
     except Exception as e:
         logger.error(f"analyze_title_with_llm failed: {e}")
         return {"diagnosis": f"服务异常: {e}", "suggestions": []}
@@ -74,7 +84,7 @@ def generate_search_queries(title: str) -> list:
     """
     Query Rewriting: 生成多个语义相似的搜索查询，提高 RAG 召回率。
     """
-    if not dashscope.api_key:
+    if not LLM_API_KEY:
         return [title]
 
     # 【重构】从 prompts/query_rewrite.txt 加载模板
@@ -82,20 +92,14 @@ def generate_search_queries(title: str) -> list:
     prompt = template.format(title=title)
 
     try:
-        response = Generation.call(
-            model=Generation.Models.qwen_plus,
-            prompt=prompt,
-            result_format='message'
-        )
-        if response.status_code == 200:
-            content = response.output.choices[0].message.content
-            content = content.replace("```json", "").replace("```", "").strip()
-            try:
-                queries = json.loads(content)
-                if isinstance(queries, list):
-                    return queries
-            except Exception:
-                pass
+        content = _invoke_text_llm(prompt)
+        content = content.replace("```json", "").replace("```", "").strip()
+        try:
+            queries = json.loads(content)
+            if isinstance(queries, list):
+                return queries
+        except Exception:
+            pass
         return [title]
     except Exception as e:
         logger.error(f"Query Rewrite failed: {e}")
@@ -106,7 +110,7 @@ def generate_hyde_doc(title: str) -> str:
     """
     HyDE (Hypothetical Document Embeddings): 生成假设性的爆款标题/描述用于检索。
     """
-    if not dashscope.api_key:
+    if not LLM_API_KEY:
         return title
 
     # 【重构】从 prompts/hyde_doc.txt 加载模板
@@ -114,14 +118,8 @@ def generate_hyde_doc(title: str) -> str:
     prompt = template.format(title=title)
 
     try:
-        response = Generation.call(
-            model=Generation.Models.qwen_plus,
-            prompt=prompt,
-            result_format='message'
-        )
-        if response.status_code == 200:
-            return response.output.choices[0].message.content.strip()
-        return title
+        content = _invoke_text_llm(prompt)
+        return content or title
     except Exception as e:
         logger.error(f"HyDE generation failed: {e}")
         return title

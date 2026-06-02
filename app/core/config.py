@@ -1,7 +1,9 @@
 import os
+from dotenv import load_dotenv
 
 # --- 基础路径配置 ---
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 # 数据目录
 DATA_RAW_DIR = os.path.join(BASE_DIR, 'data', 'raw')
@@ -29,6 +31,16 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "3306")
 DB_NAME = os.getenv("DB_NAME", "bilibili_data")
+
+# LLM 配置
+LLM_API_KEY = (
+    os.getenv("ZHIPU_API_KEY")
+    or os.getenv("ZHIPUAI_API_KEY")
+    or os.getenv("LLM_API_KEY")
+    or os.getenv("DASHSCOPE_API_KEY")
+)
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
+LLM_MODEL = os.getenv("LLM_MODEL", "glm-4-flash-250414")
 
 def get_database_url():
     if not DB_PASSWORD:

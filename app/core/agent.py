@@ -1,6 +1,4 @@
 import os
-from typing import List
-import json
 import logging
 
 # 【修复】删除了原有的 sys.path.append hack。
@@ -8,18 +6,14 @@ import logging
 # Python 的包查找机制就能找到 app.*，不需要手动篡改 sys.path。
 
 from langchain_openai import ChatOpenAI
-from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import DashScopeEmbeddings
 from langchain.prompts import PromptTemplate, ChatPromptTemplate
 from langchain.memory import ConversationBufferWindowMemory
 from langchain.agents import create_openai_tools_agent, AgentExecutor
 from langchain.tools import Tool
-from langchain import hub
-from langchain.schema import SystemMessage
-from langchain_core.runnables import RunnablePassthrough
 
 from app.core.recommender import get_similar_titles
 from app.core.predictor import predict_view
+from app.core.config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
 from app.models.schemas import PredictRequest
 # 【重构】agent system prompt 已迁移至 prompts/agent_system.txt，通过 loader 加载
 from prompts.loader import load_prompt
@@ -94,10 +88,13 @@ def init_bilibili_agent():
     构建并返回 AgentExecutor。
     【修复】原代码在模块顶层直接构建，现改为函数，在首次调用时才实例化。
     """
+    if not LLM_API_KEY:
+        raise RuntimeError("未配置 ZHIPU_API_KEY/LLM_API_KEY，无法初始化 Agent")
+
     llm = ChatOpenAI(
-        api_key=os.getenv("DASHSCOPE_API_KEY"),
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        model="qwen-plus",
+        api_key=LLM_API_KEY,
+        base_url=LLM_BASE_URL,
+        model=LLM_MODEL,
         temperature=0.7,
     )
 
