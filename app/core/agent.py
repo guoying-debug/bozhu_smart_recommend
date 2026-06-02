@@ -6,16 +6,12 @@ import logging
 # Python 的包查找机制就能找到 app.*，不需要手动篡改 sys.path。
 
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate, ChatPromptTemplate
+from langchain.prompts import ChatPromptTemplate
 from langchain.memory import ConversationBufferWindowMemory
 from langchain.agents import create_openai_tools_agent, AgentExecutor
-from langchain.tools import Tool
 
-from app.core.recommender import get_similar_titles
-from app.core.predictor import predict_view
 from app.core.config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
-from app.models.schemas import PredictRequest
-# 【重构】agent system prompt 已迁移至 prompts/agent_system.txt，通过 loader 加载
+from app.skills import build_skills
 from prompts.loader import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -27,60 +23,8 @@ _agent_executor = None
 
 
 def _make_tools(llm):
-    """构造 Agent 使用的工具列表，依赖注入 llm 而非全局变量。"""
-
-    def chat_tool(query: str) -> str:
-        """闲聊工具：处理问候、感谢等无业务诉求的对话"""
-        greet_words = ["你好", "哈喽", "嗨", "早上好", "下午好", "晚上好"]
-        thank_words = ["谢谢", "感谢", "多谢", "辛苦了"]
-        if any(word in query for word in greet_words):
-            return "你好呀！我是B站运营智能助手，能帮你优化标题、预测播放量，有任何问题都可以问～"
-        elif any(word in query for word in thank_words):
-            return "不客气啦！能帮到你我超开心，有其他问题随时都可以问～"
-        else:
-            return "哈哈，你是不是想和我闲聊呀？尽管说～"
-
-    def title_optimize_tool(query: str) -> str:
-        """标题优化工具：基于现有爆款视频库进行RAG检索，并给出优化建议。"""
-        similar_titles = get_similar_titles(query, top_k=3)
-        similar_titles_str = "\n".join(
-            [f"- {t['title']} ({int(t['view_count']/10000)}万播放)" for t in similar_titles]
-        )
-        # 【重构】从 prompts/title_optimize.txt 加载模板
-        template = load_prompt("title_optimize")
-        prompt = PromptTemplate(
-            template=template,
-            input_variables=["docs", "query"]
-        )
-        chain = prompt | llm
-        response = chain.invoke({"docs": similar_titles_str, "query": query})
-        return response.content
-
-    def play_volume_predict_tool(title: str) -> str:
-        """播放量预测工具：调用现有机器学习模型预测播放量"""
-        try:
-            req = PredictRequest(title=title, category="未知")
-            pred_view, bucket_id, bucket_name_str, explanations = predict_view(req)
-            features_str = "\n".join(
-                [f"- {exp['feature']}: {exp['effect']} ({exp['reason']})" for exp in explanations]
-            )
-            return f"""模型预测结果如下：
-- 预估播放量：{int(pred_view):,} 次
-- 所属档位：{bucket_name_str}
-
-特征分析：
-{features_str}"""
-        except Exception as e:
-            return f"预测失败: {str(e)}"
-
-    return [
-        Tool(name="闲聊工具", func=chat_tool,
-             description="仅用于处理用户的问候、感谢等闲聊类请求，不涉及任何业务分析"),
-        Tool(name="标题优化工具", func=title_optimize_tool,
-             description="当用户需要优化B站视频标题时调用。输入用户提供的原始标题（可包含特殊要求）"),
-        Tool(name="播放量预测工具", func=play_volume_predict_tool,
-             description="当用户需要预测某个标题的B站播放量时调用。输入视频标题"),
-    ]
+    """从 skills 层构造工具列表，新增技能只需修改 app/skills/__init__.py。"""
+    return [skill.as_tool() for skill in build_skills(llm)]
 
 
 def init_bilibili_agent():
