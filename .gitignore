@@ -151,6 +151,7 @@ config/*secret*
 # 日志文件
 *.log
 logs/
+data/harness_eval.jsonl
 
 # 临时文件
 *.tmp
