@@ -1,5 +1,7 @@
 @echo off
 chcp 65001 >nul
+set PYTHONIOENCODING=utf-8
+set PYTHONUTF8=1
 echo ========================================
 echo 博主智策 - 一键启动（实时数据更新）
 echo ========================================

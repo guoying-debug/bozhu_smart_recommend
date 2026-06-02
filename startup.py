@@ -73,8 +73,7 @@ def run_command(cmd, cwd=None, description=""):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            encoding='utf-8',
-            errors='ignore'
+            errors='replace'
         )
 
         for line in process.stdout:
