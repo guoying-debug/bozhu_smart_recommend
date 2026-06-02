@@ -134,9 +134,14 @@ models/trained/*.pkl
 models/trained/*.joblib
 models/trained/*.npy
 models/trained/*.h5
+models/hf/
+models/hf_cache/
 
 # 向量数据库（体积大）
 chroma_db/
+
+# Docker 运行期数据库目录
+db_data/
 
 # 配置文件中的密码
 config/*password*
@@ -161,3 +166,4 @@ Thumbs.db
 郭莹-长春理工大学-计算机科学与技术硕士.pdf
 
 .env
+chroma_db/knowledge_base/chroma.sqlite3

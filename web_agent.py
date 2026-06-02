@@ -2,6 +2,13 @@ import streamlit as st
 import os
 import sys
 
+# 页面配置必须是第一个 Streamlit 调用。
+st.set_page_config(
+    page_title="博主智策 - 运营智能助手",
+    page_icon="🤖",
+    layout="centered"
+)
+
 # 解决 ModuleNotFoundError
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
@@ -22,13 +29,6 @@ def init_app():
 
 # 执行初始化
 init_app()
-
-# 页面配置
-st.set_page_config(
-    page_title="博主智策 - 运营智能助手",
-    page_icon="🤖",
-    layout="centered"
-)
 
 # 自定义 CSS 样式
 st.markdown("""

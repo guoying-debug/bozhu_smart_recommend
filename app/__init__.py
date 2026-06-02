@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask, render_template
 from app.api.routes import api_bp
 from app.core.data_loader import load_data
@@ -29,11 +31,16 @@ def create_app():
         load_data()
         load_models()
         init_recommender()
-        # 启动定时任务
-        try:
-            init_scheduler(app)
-        except Exception as e:
-            print(f"定时任务启动失败 (可能在调试模式下重复启动): {e}")
+
+        # 仅在显式启用时启动调度器，避免在多进程容器内重复注册任务。
+        enable_scheduler = os.getenv("ENABLE_SCHEDULER", "true").lower() == "true"
+        if enable_scheduler:
+            try:
+                init_scheduler(app)
+            except Exception as e:
+                print(f"定时任务启动失败 (可能在调试模式下重复启动): {e}")
+        else:
+            print("已跳过定时任务初始化。")
             
         print("应用初始化完成。")
         

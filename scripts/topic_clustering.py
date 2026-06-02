@@ -1,9 +1,6 @@
 import pandas as pd
 from sqlalchemy import create_engine
 import os
-# 设置 Hugging Face 镜像，解决连接超时问题
-os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
-
 import sys
 import jieba
 from sklearn.cluster import KMeans, DBSCAN
@@ -14,7 +11,6 @@ from sklearn.metrics import silhouette_score
 import re
 import joblib
 import numpy as np
-from transformers import BertTokenizer, BertModel
 import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -30,6 +26,7 @@ from app.core.config import (
     BERT_EMBEDDINGS_PATH, BERT_KMEANS_MODEL_PATH, BERT_DBSCAN_MODEL_PATH,
     DATA_PATH, CHROMA_DB_DIR
 )
+from app.core.hf_loader import load_bert_bundle
 from app.utils.text_utils import preprocess_text_for_bert
 
 # 确保目录存在
@@ -43,8 +40,8 @@ def get_bert_embeddings(texts, model_name='bert-base-chinese', batch_size=16):
     使用指定的BERT模型为文本列表生成向量。
     """
     print(f"正在加载BERT模型: {model_name}...")
-    tokenizer = BertTokenizer.from_pretrained(model_name)
-    model = BertModel.from_pretrained(model_name)
+    tokenizer, model, source_label = load_bert_bundle()
+    print(f"BERT 模型来源: {source_label}")
     
     # 检查是否有可用的GPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

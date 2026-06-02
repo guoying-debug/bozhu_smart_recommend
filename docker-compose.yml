@@ -1,75 +1,134 @@
-name: bilibili_analysis
+name: ${COMPOSE_PROJECT_NAME:-guoying_bilibili}
 
 services:
-  # 1. 应用服务
-  web:
+  init:
     build: .
-    container_name: bilibili_web
-    restart: always
-    ports:
-      - "5000:5000"
+    restart: "no"
     environment:
-      - DB_HOST=db
-      - DB_PORT=3306
-      - DB_USER=root
-      - DB_PASSWORD=root_password
-      - DB_NAME=bilibili_data
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root_password}
+      DB_NAME: ${DB_NAME:-bilibili_data}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      ZHIPUAI_API_KEY: ${ZHIPUAI_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      LLM_MODEL: ${LLM_MODEL:-glm-4-flash-250414}
+      AUTO_LOAD_DATA: ${AUTO_LOAD_DATA:-true}
+      AUTO_TRAIN_MODEL: ${AUTO_TRAIN_MODEL:-true}
+      AUTO_BUILD_CHROMA: ${AUTO_BUILD_CHROMA:-true}
+      DB_WAIT_TIMEOUT: ${DB_WAIT_TIMEOUT:-180}
+      ENABLE_SCHEDULER: "false"
+    command: ["python", "scripts/docker_prepare.py"]
     volumes:
-      # 将宿主机的模型/数据/向量库挂载进容器，避免容器内找不到训练产物
       - ./data:/app/data
       - ./models:/app/models
       - ./chroma_db:/app/chroma_db
     depends_on:
-      # 改用 service_healthy，等 db 真正就绪后再启动，否则 Flask 启动时连接失败
       db:
         condition: service_healthy
     networks:
       - bilibili_net
 
-  # 2. 数据库服务
-  db:
-    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:8.0
-    container_name: bilibili_db
+  web:
+    build: .
     restart: always
     ports:
-      - "3307:3306" # 映射到宿主机 3307 端口，避免与本地 MySQL 冲突
+      - "${WEB_EXPOSED_PORT:-5000}:5000"
     environment:
-      - MYSQL_ROOT_PASSWORD=root_password
-      - MYSQL_DATABASE=bilibili_data
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root_password}
+      DB_NAME: ${DB_NAME:-bilibili_data}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      ZHIPUAI_API_KEY: ${ZHIPUAI_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      LLM_MODEL: ${LLM_MODEL:-glm-4-flash-250414}
+      ENABLE_SCHEDULER: ${ENABLE_SCHEDULER:-true}
+    command: ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "app:create_app()"]
     volumes:
-      - db_data:/var/lib/mysql
-      # init_db.sql 现在是真实文件（原来是空目录，导致容器启动报错）
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./chroma_db:/app/chroma_db
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/metrics', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - bilibili_net
+
+  agent:
+    build: .
+    restart: always
+    ports:
+      - "${AGENT_EXPOSED_PORT:-8501}:8501"
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root_password}
+      DB_NAME: ${DB_NAME:-bilibili_data}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      ZHIPUAI_API_KEY: ${ZHIPUAI_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      LLM_MODEL: ${LLM_MODEL:-glm-4-flash-250414}
+      ENABLE_SCHEDULER: "false"
+    command: ["streamlit", "run", "web_agent.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./chroma_db:/app/chroma_db
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    networks:
+      - bilibili_net
+
+  db:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:8.0
+    restart: always
+    ports:
+      - "${DB_EXPOSED_PORT:-3307}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${DB_NAME:-bilibili_data}
+    volumes:
+      - ./db_data:/var/lib/mysql
       - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - bilibili_net
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
-    # healthcheck 确保 web 服务等 db 真正就绪后才启动，避免连接失败
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_password"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-root_password}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
 
-  # 3. 监控服务: Prometheus
   prometheus:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/prom/prometheus:latest
-    container_name: bilibili_prometheus
     restart: always
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_EXPOSED_PORT:-9090}:9090"
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
     networks:
       - bilibili_net
 
-  # 4. 监控看板: Grafana
   grafana:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/grafana/grafana:latest
-    container_name: bilibili_grafana
     restart: always
     ports:
-      - "3000:3000"
+      - "${GRAFANA_EXPOSED_PORT:-3000}:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
@@ -80,6 +139,3 @@ services:
 networks:
   bilibili_net:
     driver: bridge
-
-volumes:
-  db_data:

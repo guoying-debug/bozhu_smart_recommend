@@ -15,7 +15,7 @@ seaborn==0.13.2
 plotly==6.0.1
 shap==0.48.0
 transformers==4.55.2
-torch==2.7.1+cu128
+torch==2.7.1
 itemadapter==0.12.1
 scrapy==2.13.3
 beautifulsoup4==4.14.3
@@ -29,11 +29,8 @@ langchain==0.3.28
 langchain-community==0.3.31
 langchain-core==0.3.83
 langchain-openai==0.3.35
+openai==1.109.1
 chromadb==0.6.3
 streamlit==1.32.2
 # Web 服务器与监控（原本只在 Dockerfile 里单独安装，统一移入此处保证环境一致）
-gunicorn==23.0.0
 prometheus-flask-exporter==0.23.1
-# 测试框架
-pytest==8.0.0
-pytest-mock==3.12.0

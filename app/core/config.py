@@ -12,6 +12,8 @@ CHROMA_DB_DIR = os.path.join(BASE_DIR, 'chroma_db')
 
 # 模型目录
 MODELS_TRAINED_DIR = os.path.join(BASE_DIR, 'models', 'trained')
+HF_MODELS_DIR = os.path.join(BASE_DIR, 'models', 'hf')
+HF_CACHE_DIR = os.path.join(BASE_DIR, 'models', 'hf_cache')
 
 # 静态资源目录
 STATIC_DIR = os.path.join(BASE_DIR, 'app', 'static')
@@ -41,6 +43,22 @@ LLM_API_KEY = (
 )
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
 LLM_MODEL = os.getenv("LLM_MODEL", "glm-4-flash-250414")
+
+# Hugging Face / Transformers 配置
+HF_ENDPOINT = os.getenv("HF_ENDPOINT", "https://hf-mirror.com")
+HUGGINGFACE_HUB_ENDPOINT = os.getenv("HUGGINGFACE_HUB_ENDPOINT", HF_ENDPOINT)
+BERT_MODEL_ID = os.getenv("BERT_MODEL_ID", "bert-base-chinese")
+LOCAL_BERT_MODEL_DIR = os.getenv(
+    "LOCAL_BERT_MODEL_DIR",
+    os.path.join(HF_MODELS_DIR, BERT_MODEL_ID)
+)
+
+# 在导入 transformers / huggingface_hub 前就注入环境变量，确保优先走镜像与本地缓存。
+os.environ.setdefault("HF_ENDPOINT", HF_ENDPOINT)
+os.environ.setdefault("HUGGINGFACE_HUB_ENDPOINT", HUGGINGFACE_HUB_ENDPOINT)
+os.environ.setdefault("HF_HOME", HF_CACHE_DIR)
+os.environ.setdefault("HUGGINGFACE_HUB_CACHE", HF_CACHE_DIR)
+os.environ.setdefault("TRANSFORMERS_CACHE", HF_CACHE_DIR)
 
 def get_database_url():
     if not DB_PASSWORD:

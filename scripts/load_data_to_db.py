@@ -8,6 +8,22 @@ import json
 # Assuming db_setup.py is in the same directory or accessible
 from db_setup import Base, Video, DATABASE_URL
 
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+
+
+def _resolve_input_file():
+    base_dir = os.path.dirname(__file__)
+    candidates = [
+        os.path.join(base_dir, '..', 'data', 'raw', 'output.json'),
+        os.path.join(base_dir, '..', 'src', 'bilibili_scraper', 'output.json'),
+        os.path.join(base_dir, '..', 'src', 'bilibili_scraper', 'output', 'output.json'),
+    ]
+    for file_path in candidates:
+        normalized = os.path.abspath(file_path)
+        if os.path.exists(normalized):
+            return normalized
+    return os.path.abspath(candidates[0])
+
 def clean_data(df):
     """
     Cleans and preprocesses the DataFrame.
@@ -41,7 +57,7 @@ def load_data_to_db():
     """
     Loads data from JSON file, cleans it, and upserts into the database.
     """
-    file_path = os.path.join(os.path.dirname(__file__), '..', 'src', 'bilibili_scraper', 'output.json')
+    file_path = _resolve_input_file()
 
     try:
         # Load data from JSON file
@@ -94,5 +110,4 @@ def load_data_to_db():
         print(f"An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
-    DB_PASSWORD = os.getenv("DB_PASSWORD")
     load_data_to_db()

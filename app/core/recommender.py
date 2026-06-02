@@ -3,13 +3,13 @@ import os
 import pandas as pd
 import numpy as np
 import chromadb
-from transformers import BertTokenizer, BertModel
 import torch
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import jieba
 from app.core.data_loader import load_data
 from app.core.config import CHROMA_DB_DIR
+from app.core.hf_loader import load_bert_bundle
 from app.core.llm import generate_search_queries, generate_hyde_doc
 from app.utils.text_utils import get_stopwords
 
@@ -28,10 +28,6 @@ def init_recommender():
     """
     global _CHROMA_CLIENT, _CHROMA_COLLECTION, _BERT_TOKENIZER, _BERT_MODEL, _DEVICE
     global _TFIDF_VECTORIZER, _TFIDF_MATRIX, _TITLES_LIST
-
-    # 设置 Hugging Face 镜像：放在函数内而非模块顶层，
-    # 避免 import 时污染全局环境（影响其他不需要此镜像的模块）
-    os.environ.setdefault('HF_ENDPOINT', 'https://hf-mirror.com')
 
     # 1. 初始化 ChromaDB
     if _CHROMA_CLIENT is None:
@@ -53,29 +49,13 @@ def init_recommender():
     if _BERT_MODEL is None:
         print("正在加载 BERT 模型用于在线推理...")
         try:
-            # 增加本地路径或指定镜像参数
-            model_name = 'bert-base-chinese'
-            _BERT_TOKENIZER = BertTokenizer.from_pretrained(model_name, local_files_only=False)
-            _BERT_MODEL = BertModel.from_pretrained(model_name, local_files_only=False)
-            
+            _BERT_TOKENIZER, _BERT_MODEL, source_label = load_bert_bundle()
             _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             _BERT_MODEL.to(_DEVICE)
             _BERT_MODEL.eval()
-            print(f"BERT 模型加载完成 (Device: {_DEVICE})")
+            print(f"BERT 模型加载完成，来源: {source_label} (Device: {_DEVICE})")
         except Exception as e:
             print(f"BERT 模型加载失败: {e}")
-            # 尝试再次强制设置环境变量后重试
-            try:
-                print("尝试备用镜像源加载...")
-                os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
-                _BERT_TOKENIZER = BertTokenizer.from_pretrained(model_name, mirror='tuna')
-                _BERT_MODEL = BertModel.from_pretrained(model_name, mirror='tuna')
-                _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                _BERT_MODEL.to(_DEVICE)
-                _BERT_MODEL.eval()
-                print(f"BERT 模型备用加载完成 (Device: {_DEVICE})")
-            except Exception as e2:
-                print(f"BERT 模型备用加载也失败: {e2}")
 
     # 3. 初始化 TF-IDF (Sparse Retrieval)
     if _TFIDF_VECTORIZER is None:
