@@ -32,3 +32,13 @@ class PredictBucketResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: str
+
+class TaskSubmitResponse(BaseModel):
+    task_id: str
+    status: str = "PENDING"
+
+class TaskStatusResponse(BaseModel):
+    task_id: str
+    status: str                          # PENDING / STARTED / SUCCESS / FAILURE
+    result: Optional[Any] = None
+    error: Optional[str] = None

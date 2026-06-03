@@ -47,7 +47,9 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
       LLM_MODEL: ${LLM_MODEL:-glm-4-flash-250414}
-      ENABLE_SCHEDULER: ${ENABLE_SCHEDULER:-true}
+      ENABLE_SCHEDULER: "false"
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
     command: ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "app:create_app()"]
     volumes:
       - ./data:/app/data
@@ -90,6 +92,68 @@ services:
     depends_on:
       init:
         condition: service_completed_successfully
+    networks:
+      - bilibili_net
+
+  redis:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:7-alpine
+    restart: always
+    ports:
+      - "${REDIS_EXPOSED_PORT:-6379}:6379"
+    networks:
+      - bilibili_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  celery-worker:
+    build: .
+    restart: always
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "-c", "2"]
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root_password}
+      DB_NAME: ${DB_NAME:-bilibili_data}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      ZHIPUAI_API_KEY: ${ZHIPUAI_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      LLM_MODEL: ${LLM_MODEL:-glm-4-flash-250414}
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./chroma_db:/app/chroma_db
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+    networks:
+      - bilibili_net
+
+  celery-beat:
+    build: .
+    restart: always
+    command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info"]
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root_password}
+      DB_NAME: ${DB_NAME:-bilibili_data}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - bilibili_net
 

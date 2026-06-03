@@ -5,8 +5,11 @@ from sqlalchemy.exc import IntegrityError
 import os
 import json
 
-# Assuming db_setup.py is in the same directory or accessible
-from db_setup import Base, Video, DATABASE_URL
+# 从统一的 app.db 层导入
+from app.db.models.video import Video
+from app.core.config import get_database_url
+
+DATABASE_URL = get_database_url()
 
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 

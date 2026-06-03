@@ -60,6 +60,11 @@ os.environ.setdefault("HF_HOME", HF_CACHE_DIR)
 os.environ.setdefault("HUGGINGFACE_HUB_CACHE", HF_CACHE_DIR)
 os.environ.setdefault("TRANSFORMERS_CACHE", HF_CACHE_DIR)
 
+# Celery / Redis 配置
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+
+
 def get_database_url():
     if not DB_PASSWORD:
         return None

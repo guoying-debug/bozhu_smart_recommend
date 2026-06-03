@@ -3,7 +3,7 @@ from app.core.analysis import get_cluster_summary, get_topics_list, get_feature_
 from app.core.predictor import predict_view, predict_bucket
 from app.core.recommender import get_similar_titles
 from app.core.llm import analyze_title_with_llm
-from app.models.schemas import PredictRequest, PredictViewResponse, PredictBucketResponse, ErrorResponse
+from app.models.schemas import PredictRequest, PredictViewResponse, PredictBucketResponse, ErrorResponse, TaskSubmitResponse, TaskStatusResponse
 from pydantic import ValidationError
 import plotly.graph_objects as go
 import plotly.express as px
@@ -68,53 +68,64 @@ def api_predict_bucket():
 
 @api_bp.route('/title_advice', methods=['POST'])
 def api_title_advice():
-    """标题建议 (AI 增强版：结合预测模型与 LLM 智能体)"""
-    try:
-        data = request.json
-        title = data.get("title", "")
-        category = data.get("category", "未分类")
-        
-        if not title:
-            return jsonify({"error": "Title is required"}), 400
-            
-        # 1. 获取相似爆款 (RAG - 检索增强)
-        similar_titles = get_similar_titles(title)
-        
-        # 2. 调用预测模型获取定量特征分析
-        req = PredictRequest(title=title, category=category)
-        pred_view, _, _, feature_explanations = predict_view(req)
-        
-        # 3. 调用 LLM 智能体进行综合诊断 (Agentic Workflow)
-        feature_importance = get_feature_importance()
-        llm_result = analyze_title_with_llm(
-            title=title,
-            category=category,
-            predicted_view=pred_view,
-            feature_explanations=feature_explanations,
-            similar_titles=similar_titles,
-            feature_importance=feature_importance
-        )
-        
-        # 4. 组装结果
-        # 如果 LLM 调用失败或未配置 Key，回退到规则引擎建议
-        advice_list = llm_result.get("suggestions", [])
-        if not advice_list:
-            # 规则引擎兜底
-            if len(title) < 10:
-                advice_list.append("标题偏短，建议增加描述性词汇或悬念（如：'竟然...'，'这几点...'）")
-            if not any(x in title for x in ['【', '】', '！', '？']):
-                advice_list.append("建议使用【】突出重点，或使用？！增强语气")
-        
-        diagnosis = llm_result.get("diagnosis", "智能体正在休息，仅提供基础建议。")
+    """标题建议（异步版）— 提交任务，返回 task_id"""
+    data = request.json or {}
+    title = data.get("title", "")
+    category = data.get("category", "未分类")
 
-        return jsonify({
-            "similar_titles": similar_titles,
-            "advice_list": advice_list,
-            "diagnosis": diagnosis, # 新增诊断字段
-            "summary": f"为您找到 {len(similar_titles)} 个相似热门标题，建议结合参考。"
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    if not title:
+        return jsonify({"error": "Title is required"}), 400
+
+    from app.tasks.title_tasks import analyze_title_task
+    from app.db.session import get_session
+    from app.db.models.task_result import AnalysisTask
+
+    # 提交 Celery 任务
+    job = analyze_title_task.delay(title, category)
+
+    # 预先在 MySQL 创建 PENDING 记录，方便历史查询
+    with get_session() as session:
+        session.add(AnalysisTask(
+            task_id=job.id,
+            status="PENDING",
+            input_title=title,
+            input_category=category,
+        ))
+
+    return jsonify(TaskSubmitResponse(task_id=job.id).model_dump()), 202
+
+
+@api_bp.route('/task/<task_id>', methods=['GET'])
+def api_task_status(task_id):
+    """轮询任务状态和结果"""
+    from app.celery_app import celery
+    from app.db.session import get_session
+    from app.db.models.task_result import AnalysisTask
+
+    # 优先读 MySQL 业务结果
+    with get_session() as session:
+        record = session.query(AnalysisTask).filter_by(task_id=task_id).first()
+
+    if record and record.status in ("SUCCESS", "FAILURE"):
+        return jsonify(TaskStatusResponse(
+            task_id=task_id,
+            status=record.status,
+            result=record.result_json,
+            error=record.error,
+        ).model_dump())
+
+    # 回退到 Celery backend 查状态
+    job = celery.AsyncResult(task_id)
+    status = job.state  # PENDING / STARTED / SUCCESS / FAILURE
+    result = job.result if job.state == "SUCCESS" else None
+    error = str(job.result) if job.state == "FAILURE" else None
+
+    return jsonify(TaskStatusResponse(
+        task_id=task_id,
+        status=status,
+        result=result,
+        error=error,
+    ).model_dump())
 
 @api_bp.route('/visualize/kmeans', methods=['GET'])
 def visualize_kmeans():

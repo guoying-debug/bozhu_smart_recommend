@@ -1,7 +1,6 @@
 import pandas as pd
 import os
-from sqlalchemy import create_engine
-from app.core.config import DATA_PATH, get_database_url
+from app.core.config import DATA_PATH
 
 _DF = None
 
@@ -20,14 +19,11 @@ def load_data():
         print(f"警告: 找不到数据文件: {DATA_PATH}。")
         return None
 
-    database_url = get_database_url()
-    if database_url and "category" not in _DF.columns:
+    if "category" not in _DF.columns:
         try:
-            engine = create_engine(database_url)
-            # Optimize: load only necessary columns
-            cat_df = pd.read_sql("SELECT video_id, category FROM videos", engine)
-            _DF = _DF.merge(cat_df, on="video_id", how="left")
-            _DF["category"] = _DF["category"].fillna("未知").astype(str)
+            from app.repository.video_repo import VideoRepository
+            mapping = VideoRepository.get_video_category_mapping()
+            _DF["category"] = _DF["video_id"].map(mapping).fillna("未知").astype(str)
         except Exception as e:
             print(f"数据库加载分类失败: {e}")
             pass
