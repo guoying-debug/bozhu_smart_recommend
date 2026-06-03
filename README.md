@@ -149,34 +149,6 @@
   │ app/celery_app.py│ Celery 应用实例 + beat_schedule 定时配置（每天凌晨2点聚类） │
   └─────────────────┴─────────────────────────────────────────────────────────────┘
 
-  ---
-  主要模块（app/ 下）
-
-  app/
-  ├── api/routes.py        # 路由层：/api/predict_view, /api/title_advice (异步 202), /api/task/<id> 等
-  ├── db/
-  │   ├── base.py          # SQLAlchemy Base 唯一来源
-  │   ├── session.py       # engine + SessionLocal + get_session()
-  │   └── models/          # ORM 模型：video.py, task_result.py
-  ├── repository/
-  │   └── video_repo.py    # VideoRepository 数据访问层（收口所有 Video 读写）
-  ├── tasks/
-  │   ├── title_tasks.py   # analyze_title_task (RAG→预测→LLM 三级降级)
-  │   └── data_tasks.py    # crawl/load_db/train/cluster 异步任务
-  ├── core/
-  │   ├── agent.py         # LangChain Agent，Tool Calling + 滑动窗口记忆
-  │   ├── recommender.py   # 混合 RAG 检索（Dense + Sparse + RRF）
-  │   ├── predictor.py     # Ridge 回归预测播放量 + Logistic 分档
-  │   ├── llm.py           # LLM 接口 + Query Rewriting + HyDE 增强
-  │   ├── analysis.py      # K-Means 聚类结果查询与摘要
-  │   ├── data_loader.py   # 单例数据加载与缓存
-  │   └── config.py        # 统一路径与环境变量（含 Celery/Redis 配置）
-  ├── celery_app.py        # Celery 实例 + beat_schedule 定时配置
-  ├── cli.py               # 统一 CLI：serve/worker/beat/pipeline/migrate
-  ├── models/schemas.py    # Pydantic 请求/响应校验 + 异步任务响应模型
-  └── utils/
-      ├── text_utils.py    # jieba 分词、停用词、BERT 预处理
-      └── feature_utils.py # 标题特征工程、时间段解析
 
 
 
