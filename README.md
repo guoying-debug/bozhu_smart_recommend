@@ -203,10 +203,13 @@
 - **模型可解释性 (XAI)**：打破“黑盒”预测，模型在输出预估播放量的同时，能够基于特征工程的权重系数（如：标题长度、疑问句式、高优分区），输出结构化的分析理由，增强业务人员对预测结果的信任度。
 
 ### 5. 工程化规范与云原生部署 (DevOps & Best Practices)
-- **领域驱动的分层架构**：将单体 Flask 应用重构为清晰的四层架构：`api`（路由层）、`core`（业务逻辑层）、`models`（数据模式层）、`utils`（基础工具层），实现高内聚低耦合。
-- **Pydantic 严格校验**：在 API 层面全面接入 Pydantic Model，对前后端交互数据进行强类型约束，提升接口健壮性。
-- **微服务容器化 (Docker Compose)**：编写了符合最佳实践的 `Dockerfile`，并使用 `docker-compose` 一键拉起 Web 服务、MySQL 数据库以及监控套件，实现了环境隔离与极速部署。
+- **领域驱动的分层架构**：将单体 Flask 应用重构为清晰的**五层架构**：`api`（路由层）、`core`（业务逻辑层）、`repository`（数据访问层）、`db`（ORM 与会话管理层）、`utils`（基础工具层），实现高内聚低耦合。所有数据库访问收口到 `VideoRepository`，彻底消除裸 SQL 散落问题。
+- **异步任务架构 (Celery + Redis)**：在线接口从同步阻塞改为异步 202 响应，Celery Worker 后台执行 RAG + 预测 + LLM 全流程，带三级降级保障（RAG 失败→空列表，LLM 失败→规则引擎，整体失败→任务状态落库）。定时任务由 **Celery Beat** 独立进程驱动，取代 APScheduler，根治多进程重复执行问题。
+- **数据库版本管理 (Alembic)**：表结构变更全部通过 Alembic 迁移管理，`alembic upgrade head` 随时追赶最新 schema，告别 `create_all()` 无版本状态。
+- **Pydantic 严格校验**：在 API 层面全面接入 Pydantic Model，对前后端交互数据进行强类型约束，新增异步任务响应模型（`TaskSubmitResponse` / `TaskStatusResponse`）。
+- **微服务容器化 (Docker Compose)**：编写了符合最佳实践的 `Dockerfile`，`docker-compose` 一键拉起 **9 个服务**（Web / Agent / Worker / Beat / Redis / MySQL / Prometheus / Grafana / Init），容器依赖就绪机制（healthcheck + `service_completed_successfully`）确保启动顺序正确。
 - **可观测性监控体系 (Observability)**：无缝集成 **Prometheus** 暴露应用级指标，配合 **Grafana** 可视化大盘，实时监控核心 API 的 QPS、响应延迟及错误率，满足生产级运维需求。
+- **统一 CLI 入口 (app/cli.py)**：替代散落的 `app.py` / `startup.py` / `start.bat`，提供 `serve` / `worker` / `beat` / `pipeline` / `migrate` 五个子命令，统一管理所有启动方式。
 
 ## 🚀 快速开始与运行指南
 
@@ -677,6 +680,3 @@ GET  /api/task/<id>     →  轮询状态与结果（PENDING/STARTED/SUCCESS/FAI
 
 **测试策略：** `celery.conf.update(task_always_eager=True, result_backend="cache")` 让 task 在测试中同步执行，不依赖真实 Redis。
 
----
-# 直接运行 startup.py 启动应用
-python startup.py直接自动化开启
