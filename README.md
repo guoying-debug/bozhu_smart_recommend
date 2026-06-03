@@ -173,7 +173,41 @@
 
 ## 🚀 快速开始与运行指南
 
-### 0. 推荐启动方式：只用 Docker
+### ⚡ 最简单：一键自动化启动（推荐）
+
+如果你希望**自动完成数据抓取、模型训练、向量库构建、Web 服务启动**的全流程，只需一条命令：
+
+```bash
+python startup.py
+```
+
+**首次运行会自动执行：**
+1. 📡 增量抓取最新 B 站数据（默认 500 条）
+2. 💾 数据清洗与入库（MySQL）
+3. 🤖 训练播放量预测模型（Ridge + Logistic）
+4. 🔍 生成话题聚类与向量库（BERT + ChromaDB）
+5. 🚀 启动 Flask Web 服务（`http://127.0.0.1:5000`）
+
+**个性化配置（可选）：**
+创建 `startup_config.yaml` 文件来自定义启动流程：
+```yaml
+ENABLE_CRAWL: true           # 是否启用爬虫
+CRAWL_TARGET_COUNT: 500      # 抓取数量
+CRAWL_INCREMENTAL: true      # 是否增量抓取
+RETRAIN_MODEL: true          # 是否重新训练模型
+REGENERATE_CLUSTERING: true  # 是否重新生成聚类
+CONTINUE_ON_ERROR: true      # 某步骤失败是否继续
+```
+
+**前置要求：**
+- Python 3.9+ 环境
+- 已安装依赖：`pip install -r requirements.txt`
+- MySQL 数据库已运行（本地或 Docker）
+- 可选：配置 `.env` 文件中的 `ZHIPU_API_KEY` 以启用 LLM 功能
+
+---
+
+### 🐳 方式 1：Docker 容器化部署（生产推荐）
 
 如果你的目标是以后**不再依赖本机 Conda / Python / MySQL 环境**，推荐直接使用当前仓库内置的 Docker Compose 编排。
 
@@ -183,118 +217,172 @@
 - 一个 `.env` 文件（可由 `.env.example` 复制得到）
 - 可选的 `ZHIPU_API_KEY` / `LLM_API_KEY`（如果你要启用 Agent 和 LLM 能力）
 
-```powershell
+```bash
 # 1. 进入项目目录
 cd F:\就业\项目\项目拷打\博主项目
 
 # 2. 复制环境变量模板
-Copy-Item .env.example .env
+cp .env.example .env
+# Windows PowerShell: Copy-Item .env.example .env
 
-# 3. 一键构建并启动
+# 3. 一键构建并启动所有服务
 docker compose up -d --build
 ```
 
 首次启动时，`init` 容器会在 Docker 内自动完成这些事情：
 
-- 等待 MySQL 就绪
-- 将 `data/raw/output.json` 导入数据库
-- 训练播放量预测模型
-- 构建聚类结果与 `chroma_db` 向量库
+- ⏳ 等待 MySQL 就绪（健康检查）
+- 📥 将 `data/raw/output.json` 导入数据库
+- 🎓 训练播放量预测模型
+- 🗂️ 构建聚类结果与 `chroma_db` 向量库
 
-启动完成后可访问：
+**启动完成后可访问：**
 
-- Flask 应用：`http://localhost:5000`
-- Streamlit Agent：`http://localhost:8501`
-- Prometheus：`http://localhost:9090`
-- Grafana：`http://localhost:3000`
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| Flask Web 应用 | `http://localhost:5000` | 聚类大盘与 RESTful API |
+| Streamlit Agent | `http://localhost:8501` | ChatGPT 风格 AI 对话界面 |
+| Prometheus | `http://localhost:9090` | 指标采集与查询 |
+| Grafana | `http://localhost:3000` | 监控可视化大盘（默认账号：admin/admin） |
+| MySQL | `localhost:3307` | 数据库（容器内 3306 映射到宿主机 3307） |
 
-常用命令：
+**常用命令：**
 
-```powershell
-# 查看初始化日志
+```bash
+# 查看初始化日志（排查启动问题）
 docker compose logs -f init
 
-# 停止所有服务
+# 查看所有服务状态
+docker compose ps
+
+# 停止所有服务（保留数据）
 docker compose down
 
-# 连同数据库卷一起清理
+# 停止并删除所有数据（包括数据库卷）
 docker compose down -v
+
+# 重启某个服务
+docker compose restart web
+
+# 进入容器内部调试
+docker compose exec web bash
 ```
 
-如果你只是想“以后只需要 Docker 启动就行”，到这里就够了。
+**第一次启动需要等 init 容器完成初始化（约 3~10 分钟），用这条命令确认：**
 
-### 1. 体验核心功能：启动 Agent 智能体交互界面
+```bash
+docker compose logs -f init
+```
+
+看到类似 `✅ 初始化完成` 或 `init exited with code 0` 后，直接打开浏览器访问：
+
+- **🤖 AI 对话界面**：http://localhost:8501（推荐先试这个）
+- **📊 数据大盘**：http://localhost:5000
+
+之后每次启动只需：
+
+```bash
+docker compose up -d
+```
+
+如果你只是想”以后只需要 Docker 启动就行”，到这里就够了。
+
+---
+
+### 🎯 方式 2：单独启动 AI Agent 对话界面
+
 这是本项目对最终用户最友好的入口。我们提供了一个基于 Streamlit 构建的 ChatGPT 风格 Web 界面。
 
 **启动命令：**
-```powershell
+```bash
 streamlit run web_agent.py
 ```
-**你能得到什么：** 
-浏览器会自动打开 `http://localhost:8501`。
-**你可以干什么：**
-- 直接向 Agent 提问：“帮我预测一下这个标题的播放量：Python爬虫3天速成”。
-- 要求 Agent 进行诊断：“帮我优化这个标题：去三亚旅游的vlog，要求侧重穷游党”。
-- Agent 会自动思考，调用底层的机器学习模型或 RAG 检索系统，并用自然语言将专业建议反馈给你。
 
-### 2. 开发者后台：启动 Flask Web API & 监控大盘
-如果你是前端开发人员或需要直接调用接口，可以启动 Flask 后端。
+**访问地址：** `http://localhost:8501`
+
+**功能演示：**
+- 💬 “帮我预测一下这个标题的播放量：Python爬虫3天速成”
+- ✨ “帮我优化这个标题：去三亚旅游的vlog，要求侧重穷游党”
+- 🔍 “帮我找一些关于人工智能的爆款视频”
+
+Agent 会自动思考，调用底层的机器学习模型或 RAG 检索系统，并用自然语言将专业建议反馈给你。
+
+---
+
+### 🌐 方式 3：单独启动 Flask Web 服务
+
+如果你是前端开发人员或需要直接调用 API 接口，可以启动 Flask 后端。
 
 **启动命令：**
-```powershell
+```bash
 python app.py
 ```
-**你能得到什么：**
-- 浏览器访问 `http://127.0.0.1:5000` 可以看到 B 站热门话题聚类（K-Means/DBSCAN）的 3D 散点图和数据大盘。
-- 提供了 `/api/predict_view` 和 `/api/title_advice` 等 RESTful API 供前端或第三方应用（如飞书机器人、Coze 插件）调用。
-- 后台会自动启动 `APScheduler`，每天凌晨自动更新聚类数据。
 
-### 3. 数据工程师：离线流水线与 RAG 评测
+**访问地址：** `http://127.0.0.1:5000`
+
+**你能得到什么：**
+- 📊 B 站热门话题聚类的 3D 交互式散点图（t-SNE 降维可视化）
+- 📈 话题演化趋势与数据大盘
+- 🔌 RESTful API 接口（供前端、飞书机器人、Coze 插件调用）
+  - `POST /api/predict_view` - 播放量预测
+  - `POST /api/title_advice` - 标题优化建议
+  - `GET /api/topics` - 获取聚类话题列表
+- ⏰ 后台自动启动 `APScheduler`，每天凌晨自动更新聚类数据
+
+---
+
+### 🛠️ 方式 4：手动执行离线流水线（数据工程师）
+
 如果你想从零开始构建数据，或者重新训练模型，请按顺序执行以下离线脚本：
 
-**步骤 A：数据采集**
-```powershell
-cd src\bilibili_scraper
-scrapy crawl video -a target_count=1000 -O output.json # 全量抓取
-scrapy crawl video -a incremental=True -a target_count=1000 # 增量抓取
-```
-*产出：最新 B 站热门视频元数据（JSON 格式）。*
+#### 步骤 A：数据采集
 
-**步骤 B：特征提取与模型训练**
-```powershell
-# 1. BERT 聚类分析与 ChromaDB 向量入库
+```bash
+cd src/bilibili_scraper
+
+# 全量抓取（首次运行）
+scrapy crawl video -a target_count=1000 -O output.json
+
+# 增量抓取（日常更新）
+scrapy crawl video -a incremental=True -a target_count=1000
+```
+
+**产出：** 最新 B 站热门视频元数据（`data/raw/output.json`）
+
+#### 步骤 B：数据入库
+
+```bash
+python scripts/load_data_to_db.py
+```
+
+**产出：** 数据清洗并导入 MySQL `bilibili_data.videos` 表
+
+#### 步骤 C：特征工程与模型训练
+
+```bash
+# 1. BERT 向量化 + K-Means 聚类 + ChromaDB 向量入库
 python scripts/topic_clustering.py
 
-# 2. 训练播放量预测双模型 (回归+分类)
+# 2. 训练播放量预测双模型（Ridge 回归 + Logistic 分类）
 python scripts/train_view_predictor.py
-```
-*产出：更新 `models/trained/` 目录下的 `.joblib` 模型权重文件，并生成最新的 `chroma_db/` 本地向量库供在线 RAG 检索使用。*
 
-**步骤 C：自动化质量评估**
-```powershell
-# 运行 RAG 系统的 Recall 指标与 LLM-as-a-Judge 评估
+# 3. （可选）重新生成特征重要性图表
+python scripts/regenerate_importance_plot.py
+```
+
+**产出：** 
+- `models/trained/*.joblib` - 训练好的模型文件
+- `chroma_db/` - 本地向量数据库
+- `app/static/images/` - 可视化图表
+
+#### 步骤 D：质量评估（可选）
+
+```bash
+# 运行 RAG 检索质量评估（Recall@K + LLM-as-a-Judge）
 python scripts/evaluate_rag.py
 ```
-*产出：在终端输出当前检索系统的 Recall@K 命中率，以及大模型生成的诊断建议的质量打分（1-5分）。用于验证你修改 Prompt 或更换 Embedding 模型后，系统效果是变好了还是变差了。*
 
-### 4. 生产级部署：Docker 容器化架构
-如果你想一键启动包含 数据库、Web服务、监控体系的完整微服务架构：
-
-```powershell
-# 推荐先复制环境变量模板
-Copy-Item .env.example .env
-
-# 再执行一键启动
-docker compose up -d --build
-```
-**架构全貌：**
-- **初始化服务**: `init` 容器自动准备数据库、模型和向量库
-- **业务服务**: `http://localhost:5000`
-- **Agent 服务**: `http://localhost:8501`
-- **监控服务**: `http://localhost:9090`
-- **Grafana**: `http://localhost:3000`
-
-*(如需清理环境，可执行：`docker compose down -v`)*
+**产出：** 终端输出当前检索系统的 Recall@K 命中率和生成质量打分（1-5分）。用于验证你修改 Prompt 或更换 Embedding 模型后，系统效果是否提升。
 
 ## 📚 接口文档与外网暴露
 
